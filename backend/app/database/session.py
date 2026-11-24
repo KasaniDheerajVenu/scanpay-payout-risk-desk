@@ -22,6 +22,7 @@ class Database:
     def __init__(self, settings: Settings) -> None:
         if settings.database_url is None:
             raise ValueError("Application database URL is not configured")
+        self.app_mode = settings.app_mode
         self.engine = create_engine(
             postgres_url(settings.database_url),
             pool_pre_ping=True,

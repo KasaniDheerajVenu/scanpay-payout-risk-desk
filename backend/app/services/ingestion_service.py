@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from hashlib import sha256
 from json import dumps
 
+from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -198,7 +198,7 @@ def persist_payouts(
     )
     stored = find_sources(session, Payout, Payout.payout_id, history_ids | pending_ids)
     selected: dict[str, PayoutWindow] = {}
-    recorded_at = datetime.now(UTC)
+    recorded_at = session.scalar(select(func.clock_timestamp()))
     for kind in kinds:
         historical = kind == FileType.HISTORY_PAYOUTS
         source_kind = SourceKind.HISTORY if historical else SourceKind.PENDING
@@ -302,7 +302,7 @@ def ingest(
                 for kind, item in progress.items()
             ]
             batch.status = BatchStatus.READY
-            batch.imported_at = datetime.now(UTC)
+            batch.imported_at = session.scalar(select(func.clock_timestamp()))
             session.commit()
             return batch, True
     except ImportFailure as failure:
