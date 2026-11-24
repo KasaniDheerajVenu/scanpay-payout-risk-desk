@@ -40,6 +40,26 @@ def settlement_window(created: datetime) -> tuple[date, ...]:
         return ()
 
 
+def payable_mismatch(
+    expected_count: int, expected_cents: int, count: int, cents: int
+) -> tuple[str, str] | None:
+    if count != expected_count:
+        return "payout_count_mismatch", "txn_count"
+    if cents != expected_cents:
+        return "payout_amount_mismatch", "payout_amount_usd"
+    return None
+
+
+def within_collection_bounds(
+    covers_from: date, covers_to: date, first_day: date | None, last_day: date | None
+) -> bool:
+    return (
+        first_day is not None
+        and last_day is not None
+        and (first_day <= covers_from <= covers_to <= last_day)
+    )
+
+
 def reconcile(
     session: Session, scope: str, windows: list[PayoutWindow], cutoff: datetime
 ) -> list[str]:
@@ -88,17 +108,12 @@ def reconcile(
                 cents += day_cents
             elif window.pending and day_count:
                 raise window.error("captured_outside_coverage", "covers_from")
+        mismatch = payable_mismatch(payout.txn_count, payout.payout_amount_cents, count, cents)
         if window.pending:
-            if count != payout.txn_count:
-                raise window.error("payout_count_mismatch", "txn_count")
-            if cents != payout.payout_amount_cents:
-                raise window.error("payout_amount_mismatch", "payout_amount_usd")
-        elif (
-            first_day is None
-            or last_day is None
-            or not first_day <= payout.covers_from <= payout.covers_to <= last_day
-            or count != payout.txn_count
-            or cents != payout.payout_amount_cents
+            if mismatch is not None:
+                raise window.error(*mismatch)
+        elif mismatch is not None or not within_collection_bounds(
+            payout.covers_from, payout.covers_to, first_day, last_day
         ):
             incomplete_history.append(payout.payout_id)
     return incomplete_history

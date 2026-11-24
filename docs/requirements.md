@@ -110,9 +110,19 @@ Additional acceptance: remove input files after a successful synthetic import, t
 
 ## Phase 4 traceability
 
+Phase 5 additionally revalidates pending payouts against the committed import boundary during evaluation. See the Phase 5 table below.
+
 | ID | Implemented functionality | Implementation and tests | Status |
 | --- | --- | --- | --- |
 | FR-01, FR-25, NFR-01 | Exact CSV headers, typed values, safe source IDs, integer cents, IST dates, and required references | [CSV normalization](../backend/app/services/csv_source.py), [CSV tests](../backend/tests/unit/test_csv_source.py), [PostgreSQL ingestion tests](../backend/tests/integration/test_ingestion.py) | Verified with fabricated fixtures and PostgreSQL. |
 | FR-02, FR-03 | Pending reconciliation by team and inclusive date coverage, preserved non-captured attempts, and historical completeness findings | [Reconciliation](../backend/app/services/reconciliation_service.py), [settlement and ingestion tests](../backend/tests/unit/test_csv_source.py), [PostgreSQL reconciliation tests](../backend/tests/integration/test_ingestion.py) | Verified, including weekend coverage and rejection of overlaps and count/amount mismatches. |
 | FR-26, FR-27, FR-28 | Initial and incremental import, authenticated CLI, deterministic replay, conflict handling, one-time disposition completion, atomic persistence, and typed membership | [Ingestion service](../backend/app/services/ingestion_service.py), [local CLI](../backend/scripts/import_dataset.py), [PostgreSQL ingestion tests](../backend/tests/integration/test_ingestion.py) | Verified, including concurrent requests, rollback, and database reads after deleting synthetic input files. |
 | FR-21, FR-22, FR-33, FR-34, NFR-06, NFR-07 | Admin upload, shared dataset scope, batch list and details, bounded multipart parsing, sanitized errors, and allowlisted demo preset | [Dataset routes](../backend/app/api/datasets.py), [multipart processing](../backend/app/api/dataset_upload.py), [demo preset](../sample_data/synthetic-v1/), [HTTP tests](../backend/tests/integration/test_ingestion.py) | API behavior verified with the synthetic database. Frontend workflow and hosted deployment remain pending. |
+
+## Phase 5 traceability
+
+| ID | Implemented functionality | Implementation and tests | Status |
+| --- | --- | --- | --- |
+| FR-02, FR-28, FR-29 | Scoped READY batch selection, exact pending membership, committed import boundary, payout revalidation, and database-only read-only REPEATABLE READ materialization | [Evaluation inputs](../backend/app/services/evaluation_input_service.py), [snapshot queries](../backend/app/repositories/evaluation_inputs.py), [PostgreSQL evaluation tests](../backend/tests/integration/test_evaluation.py) | Verified with synthetic backfills, unchanged membership, and source files deleted. Feature extraction and ML are pending. |
+| FR-05, FR-06, FR-07, FR-17 | Typed normal-history and fraud candidates, separate cutoff and availability clocks, historical completeness checks, and frozen 20-day monitoring inputs | [Eligibility and monitoring](../backend/app/risk_engine/eligibility.py), [policy tests](../backend/tests/unit/test_evaluation_policy.py), [PostgreSQL evaluation tests](../backend/tests/integration/test_evaluation.py) | Input preparation verified. Baselines, graph analysis, and dashboard remain pending. |
+| FR-21, FR-24, FR-30, NFR-02, NFR-06 | Server-side actor and scope, stable input fingerprint, sanitized manifest, advisory-lock run creation, and atomic claim/failure transitions | [Run service](../backend/app/services/evaluation_service.py), [manifest](../backend/app/services/evaluation_manifest.py), [PostgreSQL evaluation tests](../backend/tests/integration/test_evaluation.py) | Verified for Phase 5. Model metadata, publication and completion are later phases. |

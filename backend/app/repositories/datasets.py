@@ -3,8 +3,8 @@ from uuid import UUID
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import DatasetBatch
-from app.models.values import BatchMode, BatchStatus
+from app.models import DatasetBatch, UploadedFile
+from app.models.values import BatchMode, BatchStatus, FileType
 
 
 def lock_imports(session: Session) -> None:
@@ -53,9 +53,13 @@ def list_batches(session: Session, scope: str) -> list[DatasetBatch]:
     )
 
 
-def get_batch(session: Session, scope: str, batch_id: UUID) -> DatasetBatch | None:
-    return session.scalar(
-        select(DatasetBatch)
-        .where(DatasetBatch.scope_key == scope, DatasetBatch.batch_id == batch_id)
-        .options(selectinload(DatasetBatch.files))
+def get_batch(
+    session: Session, scope: str, batch_id: UUID, file_type: FileType | None = None
+) -> DatasetBatch | None:
+    files = DatasetBatch.files
+    if file_type is not None:
+        files = files.and_(UploadedFile.file_type == file_type)
+    statement = select(DatasetBatch).where(
+        DatasetBatch.scope_key == scope, DatasetBatch.batch_id == batch_id
     )
+    return session.scalar(statement.options(selectinload(files)))
