@@ -1,0 +1,2 @@
+payout_id,team_id,created_at_ist,covers_from,covers_to,txn_count,payout_amount_usd,status
+000403,0001,2025-02-21 17:30:00,2025-02-19,2025-02-19,1,42.25,PENDING_DECISION

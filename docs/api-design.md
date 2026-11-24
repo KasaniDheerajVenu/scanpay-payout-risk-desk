@@ -8,8 +8,8 @@ Use `/api` routes, typed Pydantic and TypeScript contracts. All domain reads req
 | POST /api/auth/login | public, CSRF protected and rate limited | `{username,password}`; 200 with a signed HttpOnly session cookie and safe user metadata |
 | POST /api/auth/logout | authenticated, CSRF protected | 204 on account-wide session revocation and cookie clear |
 | GET /api/auth/me | authenticated | 200 with `user_id`, `username`, `display_name`, `role`, `mode`, and `permissions` |
-| POST /api/datasets/upload | admin, private only | multipart mode, cutoff, typed file fields: teams, history_transactions, history_payouts, latest_transactions, pending_payouts; return batch ID, status, counts and sanitized validation |
-| POST /api/datasets/demo-import | demo admin only | allowlisted synthetic preset ID, no file or path input |
+| POST /api/datasets/upload | admin, private only | multipart `mode`, `cutoff`, optional `assessment`, and typed file fields |
+| POST /api/datasets/demo-import | demo admin only | JSON `{"preset_id":"synthetic-v1"}` |
 | GET /api/datasets | authorized reader | list batch IDs, cutoff, status, counts, timestamps |
 | GET /api/datasets/{id} | authorized reader | file metadata/validation, no contents |
 | POST /api/evaluations | admin | batch_id; explicit cutoff from batch, optional documented config version; create/reuse run, return run ID/status |
@@ -26,6 +26,16 @@ Use `/api` routes, typed Pydantic and TypeScript contracts. All domain reads req
 | GET /health | public | safe liveness/readiness, no credentials or private stats |
 
 Initial import requires all five fields; incremental requires latest_transactions + pending_payouts, optional teams/history files. Filenames do not determine schemas. Support verified historical dispositions via history_payouts, with optional history_transactions for newly imported history. Limit file count, total bytes, rows and field length; no arbitrary local paths or ZIPs. In demo reject arbitrary uploads before reading content; built-in synthetic presets only. Do not log multipart content. HTTP 201 for accepted import/new synchronous completed run/override; 202 for persisted asynchronous evaluation if actually implemented; 200 for idempotent existing result; 401 unauthenticated, 403 forbidden, 404 unavailable scope or ID, 409 stale version/conflicting IDs/concurrent operation, 413 oversized, 422 invalid schema/reconciliation/decision, 503 unavailable. A failure records sanitized status separately. Never return partial results as completed.
+
+## Dataset requests and responses
+
+The five file parts are `teams`, `history_transactions`, `history_payouts`, `latest_transactions`, and `pending_payouts`. Send `mode` as `INITIAL` or `INCREMENTAL` and an ISO timestamp as `cutoff`. An offset-free timestamp means Asia/Kolkata. The optional `assessment` field defaults to false. Set it to `true` on the initial assessment import to require 24 unique teams and 20 unique pending payouts. An incremental import can provide a header-only latest file when existing transactions already cover the submitted pending payouts.
+
+Send authenticated writes with a fresh `X-CSRF-Token` and its matching cookie. Browser clients can use `FormData` and let the browser set the multipart boundary. The server resolves the actor and uses the shared `local` dataset scope or the common synthetic `demo` scope. Review overrides use an account-specific scope in demo mode. Upload permission, mode, and CSRF checks run before the application reads multipart data. Demo import accepts the bundled preset ID only.
+
+Import and detail responses include `batch_id`, `status`, `mode`, `cutoff`, `imported_at`, `counts`, `validation`, and `files`. Counts include `rows`, `inserted`, `unchanged`, and `dispositions_completed`. File entries expose type, sanitized filename, checksum, bytes, record counts, and aggregate validation findings. The list returns batch summaries without file details. Source membership and payout-level historical completeness markers are available to internal evaluation readers through PostgreSQL.
+
+An invalid CSV can return `{"error":{"code":"validation_error","message":"Unprocessable Content","details":{"code":"invalid_value","file_type":"latest_transactions","row":2,"field":"amount_usd"}}}`. Clients can use the HTTP status and `error.details.code` to handle failures. Row numbers count physical CSV lines including the header. Multipart errors can omit file and row details. Failures reported by the ingestion service are recorded when PostgreSQL is available. Requests denied before ingestion and malformed multipart envelopes have no batch record.
 
 ## Authentication and frontend integration
 

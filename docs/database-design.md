@@ -1,6 +1,6 @@
 # Payout Risk Desk database design
 
-Phase 2 defines the eleven application tables in the `0001_database_first` Alembic revision. PostgreSQL is the source of truth in both private local and isolated synthetic Neon environments. CSVs are transient ingestion inputs. Every source column maps to a typed relational column, with monetary values in integer cents. Upload metadata and source membership identify accepted records. Phase 3 uses the existing `users` table and its `auth_version` for sign-in and account-wide revocation. Upload and evaluation workflows follow in later phases.
+The eleven application tables are defined in the `0001_database_first` Alembic revision. PostgreSQL is the source of truth in both private local and isolated synthetic Neon environments. CSVs are transient ingestion inputs. Every source column maps to a typed relational column, with monetary values in integer cents. Upload metadata and source membership identify accepted records. Sign-in and account-wide revocation use `users.auth_version`.
 
 ## Source files and column mapping
 
@@ -115,6 +115,12 @@ erDiagram
 ```
 
 ## Import and evaluation transactions
+
+The input digest uses SHA-256 checksums keyed by declared file type, mode, UTC cutoff, and assessment flag. Renaming or reordering parts preserves the digest. Changing CSV bytes can create a new batch whose identical normalized records are counted as unchanged. Membership stores unique typed IDs, while row counts include repeated identical rows. Completed dispositions have their own count in validation metadata.
+
+`UPLOADED` and `VALIDATING` are intermediate states inside the import transaction. Concurrent readers see the committed `READY` batch or a separately recorded `FAILED` batch. A crash before commit rolls back source rows and releases the advisory lock. Recording `FAILED` depends on PostgreSQL availability. Retrying the same input after commit returns the existing batch.
+
+Historical windows with unavailable boundary days or a captured total that differs from the supplied payout are flagged with typed payout IDs in file validation metadata. Later snapshot queries should reevaluate completeness because an incremental history import can add missing attempts. Pending reconciliation uses prior and staged captured attempts. Payment attempts of all statuses remain stored.
 
 Validate bounded multipart streams in memory or temporary local files, remove temporary files on success/failure. Accept initial five files or later transaction and pending pair with optional new teams and historical dispositions/history. Read file types and headers; validate normalized records, dates, keys, references, money, duplicate/conflicting values and cutoff; reconcile pending captured count and cents using existing DB plus staged rows. Transaction-scoped advisory lock serializes imports; atomically insert accepted source rows and membership metadata, then mark READY. Roll back all source writes on any invalid file; retain sanitized FAILED metadata separately. Do not allow a partially valid batch. Record imported IDs, not raw records in metadata. Use source-ID uniqueness and content digest for idempotency; no duplicate rows or duplicate evaluation on retry. Initial assessment mode asserts 24 teams and 20 payouts, general mode has no fixed count. Require pending payouts in one import batch to share an IST creation day; split different creation days into separate batches.
 

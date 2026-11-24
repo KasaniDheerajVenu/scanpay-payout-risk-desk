@@ -1,0 +1,2 @@
+txn_id,team_id,created_at_ist,amount_usd,tip_usd,payment_method,card_fingerprint,card_country,status,customer_name,customer_zip
+000306,0001,2025-02-19 10:30:00,42.00,0.25,ach,,,captured,Fictional Customer 0001,00420

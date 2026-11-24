@@ -1,0 +1,3 @@
+team_id,team_name,profession,owner_name,owner_phone,business_address,city,state,onboarded_on,status,suspended_on,payout_bank_routing,payout_bank_last4,signup_device_id
+0001,Imaginary Plumbing Workshop 1,Plumbing,Fictional Owner 1,0005550001,"1 Fictional Lane, Suite 1",Example Harbor,MA,2024-06-01,active,,000000019,0001,FAKE-DEVICE-1
+0002,Imaginary Locksmith Workshop 2,Locksmith,Fictional Owner 2,0005550002,"2 Fictional Lane, Suite 1",Example Harbor,MA,2024-06-01,suspended,2025-02-14,000000019,0002,

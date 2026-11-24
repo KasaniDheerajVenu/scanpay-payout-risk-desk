@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     login_rate_limit: int = Field(default=5, ge=1)
     login_rate_window_seconds: int = Field(default=300, ge=1)
     login_rate_max_entries: int = Field(default=4096, ge=2)
+    upload_max_file_bytes: int = Field(default=4 * 1024 * 1024, ge=1)
+    upload_max_total_bytes: int = Field(default=16 * 1024 * 1024, ge=1)
+    upload_max_rows_per_file: int = Field(default=100_000, ge=1)
+    upload_max_field_chars: int = Field(default=4096, ge=1, le=131_072)
 
     @field_validator("database_url", "migration_database_url")
     @classmethod
