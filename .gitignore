@@ -1,0 +1,33 @@
+# Confidential assessment material
+/SCANPAY_CODEX_MASTER_PROMPT.md
+/codex_prompt.md
+/private_data/
+
+# CSV files - allow only synthetic fixtures
+*.csv
+!/sample_data/**/*.csv
+!/backend/tests/fixtures/**/*.csv
+decisions.csv
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Machine learning artifacts
+artifacts/
+*.joblib
+*.pkl
+
+# Frontend
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
