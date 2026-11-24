@@ -1,6 +1,6 @@
 # Payout Risk Desk database design
 
-Phase 2 defines the eleven application tables in the `0001_database_first` Alembic revision. PostgreSQL is the source of truth in both private local and isolated synthetic Neon environments. CSVs are transient ingestion inputs. Every source column maps to a typed relational column, with monetary values in integer cents. Upload metadata and source membership identify accepted records. Upload, evaluation and authentication workflows are implemented in later phases.
+Phase 2 defines the eleven application tables in the `0001_database_first` Alembic revision. PostgreSQL is the source of truth in both private local and isolated synthetic Neon environments. CSVs are transient ingestion inputs. Every source column maps to a typed relational column, with monetary values in integer cents. Upload metadata and source membership identify accepted records. Phase 3 uses the existing `users` table and its `auth_version` for sign-in and account-wide revocation. Upload and evaluation workflows follow in later phases.
 
 ## Source files and column mapping
 
