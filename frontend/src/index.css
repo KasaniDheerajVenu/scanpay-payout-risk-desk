@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --background: #f3f6fa;
+  --foreground: #172641;
+  --card: #ffffff;
+  --card-foreground: #172641;
+  --muted: #e8eef5;
+  --muted-foreground: #455974;
+  --border: #d7e0eb;
+  --input: #d7e0eb;
+  --primary: #2057a7;
+  --primary-hover: #174887;
+  --primary-foreground: #ffffff;
+  --ring: #2766bd;
+  --sidebar: #102441;
+  --sidebar-foreground: #f2f6fb;
+  --success: #116447;
+  --success-surface: #e5f4ed;
+  --warning: #825000;
+  --destructive: #a12b34;
+  --error-surface: #fcecef;
+  --radius: 0.625rem;
+  --shadow-panel: 0 2px 4px rgb(15 38 65 / 0.06);
+}
+
+@theme inline {
+  --font-sans: "Segoe UI", system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
+  --color-warning: var(--warning);
+  --color-destructive: var(--destructive);
+  --color-error-surface: var(--error-surface);
+  --radius-panel: var(--radius);
+}
+
+@layer base {
+  body {
+    @apply min-h-svh bg-background font-sans text-foreground antialiased;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-4 outline-ring;
+  }
+}

@@ -1,0 +1,101 @@
+# Requirements specification
+
+Status: proposed design, to be verified during implementation. **Required** denotes the assessment brief or the updated submission instructions reported by the candidate. **Design** denotes an engineering choice. **Optional** denotes an enhancement.
+
+## 1. Problem and actors
+
+ScanPay collects payments for field-service businesses (teams). Before a payout leaves ScanPay, risk operations needs a decision backed by history and evidence. The supplied scenario is 13 November 2026 at 10:00 IST; 20 pending payouts created on 12 November cover 10 November collections. History includes 24 teams and the preceding 20 days of payment activity. The application is decision support, not a payment processor.
+
+Actors: risk analyst (investigate and override); viewer (read-only demo access); admin (configuration, evaluation and user provisioning). Roles are a proposed extension, not required in the original brief.
+
+## 2. Scope
+
+Required: ingest supplied data locally, evaluate all pending payouts, learn team and profession norms, recognize known fraud, provide reasons and evidence, support overrides, monitor amounts and counts against history, export decisions, and provide repository and deployment links under the updated instructions.
+
+Design: full-stack React/FastAPI application, durable audit storage, synthetic deployed demo, configurable statistical thresholds, graph-based fraud linkage, basic authenticated access for hosted operations.
+
+Design (required for this project): Isolation Forest training/validation/inference, CSV upload, database-first evaluation, multi-batch persistence and authenticated audit. Optional: dedicated graph visualization, advanced user management, configurable threshold UI.
+
+Out of scope: real payment processing, bank transfers, settlement scheduling, streaming, microservices, LLM/RAG, real-time model retraining, and hosting actual assessment data without explicit approval.
+
+## 3. Functional requirements
+
+| ID | Requirement | Priority | Origin |
+| --- | --- | --- | --- |
+| FR-01 | Load all five CSV files and validate headers, IDs, types, foreign keys and dates | P0 | Design |
+| FR-02 | Associate transactions to payouts using team and inclusive IST coverage dates; reconcile captured count and amount including tips | P0 | Required rules / design validation |
+| FR-03 | Retain declined and refunded attempts for risk analysis | P0 | Design |
+| FR-04 | Compute historical and current behavioural features | P0 | Required |
+| FR-05 | Learn comparable normal behaviour per team and profession | P0 | Required |
+| FR-06 | Handle insufficient history, missing values and multi-day coverage; exclude confirmed fraud from normal baselines | P0 | Design |
+| FR-07 | Identify confirmed historical fraud cases and build evidence-supported fraud clusters | P0 | Required |
+| FR-08 | Check pending payouts for exposure to known fraud; distinguish weak links and victims | P0 | Required / design |
+| FR-09 | Detect unusual activity using robust statistical comparisons | P0 | Required outcome; design method |
+| FR-10 | Implement, train, validate and score eligible payouts using Isolation Forest; explicit fallback | P0 | Design |
+| FR-11 | Produce exactly one decision per pending payout: Approve, Manual review or Reject | P0 | Required |
+| FR-12 | Generate actionable reasons and supporting IDs for all review/reject decisions; include known cluster on Reject | P0 | Required |
+| FR-13 | List all payouts with decision, amount, team and reason; provide evidence drill-down | P0 | Required |
+| FR-14 | Search, sort and filter the payout queue | P1 | Design |
+| FR-15 | Allow override of any original decision with a mandatory reason | P0 | Required |
+| FR-16 | Persist original and effective decision, all override events and timestamps | P0 | Required / design |
+| FR-17 | Monitor payout counts and dollars by decision and compare with history | P0 | Required |
+| FR-18 | Show fraud clusters, related records and team/profession baselines | P1 | Design |
+| FR-19 | Export all pending payouts using the required six-column decisions.csv schema | P0 | Required |
+| FR-20 | Retain verified analyst feedback for future batches without silently rewriting history | P0 | Required / design |
+| FR-21 | Authenticate users and enforce role-based permissions on protected API operations | P0 | Design; original brief excludes login/roles |
+| FR-22 | Expose health and dataset readiness information | P1 | Design |
+| FR-23 | Publish reproducible code and a working synthetic-data deployment | P0 | Updated submission instructions |
+| FR-24 | Support versioned evaluation and prevent silent loss of overrides on reruns | P1 | Design |
+
+## 4. Non-functional requirements
+
+| ID | Requirement | Verification |
+| --- | --- | --- |
+| NFR-01 | Monetary precision to the cent | Reconciliation tests using integer cents |
+| NFR-02 | Reproducible automated outcomes for the same input/configuration | Repeat evaluation tests; fixed model seed |
+| NFR-03 | Explainability and traceability | Verify findings against existing transaction, payout or team IDs |
+| NFR-04 | Atomic override and audit persistence | Transaction rollback and concurrency tests |
+| NFR-05 | Durable local state | Restart test |
+| NFR-06 | Data privacy | Review Git, logs, artifacts and deployment seed data; no actual rows to AI tools |
+| NFR-07 | API security | Validate inputs; server-side RBAC; HTTPS and secure session handling |
+| NFR-08 | Maintainability | Modular domain/services/API/repository separation, typed contracts and automated tests |
+| NFR-09 | Usability | Responsive interface at 360/768/1024/1440px, clear decision labels, evidence drill-down, loading/error states |
+| NFR-10 | Performance | Proposed target: batch evaluation under 5 s, precomputed API requests under 500 ms locally; benchmark and report actual results |
+| NFR-11 | Observability | Health/readiness checks and structured non-sensitive logs |
+| NFR-12 | Safe failure | Invalid input blocks evaluation or is explicitly held; never silently approved |
+| NFR-13 | Reproducible deployment | Dependency lock/pin, environment example, tested setup, synthetic seed |
+
+## 5. Acceptance criteria
+
+- The actual batch contains exactly 20 distinct pending payout IDs; each appears once in the local export.
+- Reject decisions have a traceable connection to a known fraud cluster. An anomaly alone cannot reject.
+- Review/reject reasons are actionable and cite existing records. Team and profession comparisons are available where history permits.
+- Counts and amounts across effective decision categories sum to the batch total. Historical manually approved payouts are labelled accurately.
+- Overrides require a reason, preserve originals, append audit events and update monitoring/export consistently.
+- The export uses `payout_id,team_id,decision,fraud_cluster,reasons,evidence`, with the prescribed decision strings and blank clusters for non-rejects.
+- Synthetic demo demonstrates normal, review and known-fraud cases without exposing confidential data. Actual outputs are delivered privately.
+
+## 6. Open questions and assumptions
+
+- Updated deployment requirement was reported by the candidate; confirm whether synthetic demo plus local actual-data output satisfies the reviewers. Original brief says deployment and login are not needed.
+- Confirm what constitutes sufficient fraud exposure and how historical reasons identify case boundaries. No exact linkage rules are assumed verified before local analysis.
+- Confirm whether CSV should reflect initial or effective decisions. Proposed default: effective decisions, preserving originals internally.
+- Confirm how a human rejection for newly discovered fraud without an existing cluster should be recorded. Until clarified, Reject overrides require a valid known cluster and supporting evidence; new unconfirmed cases remain reviewable.
+- Thresholds, minimum history and ML usefulness are provisional until chronological local analysis. Do not publish actual findings or confidential derived artifacts without permission.
+
+## 7. Added database-first requirements
+
+| ID | Requirement | Priority | Origin |
+| --- | --- | --- | --- |
+| FR-25 | Map every supplied CSV field into typed relational columns; no raw file storage | P0 | User design |
+| FR-26 | Initial five-file upload and incremental latest data upload in private app | P0 | User design |
+| FR-27 | Validate and reconcile atomically, deduplicate identical rows, reject conflicting IDs, allow verified once-only disposition import | P0 | User design |
+| FR-28 | Persist batch and file metadata only, including checksums and membership IDs | P0 | Design |
+| FR-29 | Train and infer from eligible as-of DB snapshot, no CSV reads during evaluation | P0 | User design |
+| FR-30 | Persist run and model metadata, ML score/flag, evidence and hybrid decision | P0 | User design |
+| FR-31 | Select historical completed runs, preserve original automated results across reevaluation | P0 | User design |
+| FR-32 | Append decision history with authenticated actor, reason, version; derive CURRENT/SUPERSEDED | P0 | User design |
+| FR-33 | Show import/evaluation status, validation errors, model limitations and retry state | P0 | Design |
+| FR-34 | Restrict public deployment to synthetic preset import, no arbitrary CSV upload | P0 | Privacy design |
+
+Additional acceptance: remove input files after a successful synthetic import, then train/score/export from PostgreSQL. A second batch must learn from eligible prior verified dispositions; pending/override-only records cannot enter training. Exact duplicate imports do not duplicate source rows. Conflicting imports roll back. Previous runs and all overrides remain intact. No file content in DB or logs. Model effectiveness must be measured, not promised. Use PostgreSQL locally and Neon hosted.
