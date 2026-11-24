@@ -99,3 +99,11 @@ Out of scope: real payment processing, bank transfers, settlement scheduling, st
 | FR-34 | Restrict public deployment to synthetic preset import, no arbitrary CSV upload | P0 | Privacy design |
 
 Additional acceptance: remove input files after a successful synthetic import, then train/score/export from PostgreSQL. A second batch must learn from eligible prior verified dispositions; pending/override-only records cannot enter training. Exact duplicate imports do not duplicate source rows. Conflicting imports roll back. Previous runs and all overrides remain intact. No file content in DB or logs. Model effectiveness must be measured, not promised. Use PostgreSQL locally and Neon hosted.
+
+## Phase 3 traceability
+
+| ID | Implemented functionality | Implementation and tests | Status |
+| --- | --- | --- | --- |
+| FR-21 | Login, current user, logout, user provisioning, live role enforcement | [Auth routes](../backend/app/api/auth.py), [role dependencies](../backend/app/api/dependencies.py), [provisioning CLI](../backend/scripts/create_user.py), [PostgreSQL auth tests](../backend/tests/integration/test_auth.py) | Implemented and verified against synthetic PostgreSQL. Future domain routes still need operation-specific permissions. |
+| NFR-07 | Argon2id, signed expiring cookies, CSRF and Origin validation, process-local rate limits | [Security](../backend/app/core/security.py), [rate limiter](../backend/app/core/rate_limit.py), [security tests](../backend/tests/unit/test_security.py), [auth integration tests](../backend/tests/integration/test_auth.py) | Phase 3 controls verified locally, including Secure cookie behavior under simulated HTTPS. Hosted deployment verification is pending. |
+| FR-32 | Trusted actor and review scope for future audit writes | [Actor context](../backend/app/core/review_scope.py), [authorization rules tests](../backend/tests/unit/test_authorization_rules.py), [scope integration tests](../backend/tests/integration/test_auth.py) | Actor and scope foundation verified. Override API and effective history workflows are pending. |

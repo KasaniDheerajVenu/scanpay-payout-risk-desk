@@ -50,7 +50,7 @@ The assessment datasets are processed locally and must not be committed, uploade
 
 ## Development and deployment
 
-The frontend and FastAPI scaffold provide a local status screen. Phase 2 adds the PostgreSQL schema, migrations and database health fields. Dataset upload, authentication and evaluation workflows follow in later phases.
+The frontend and FastAPI scaffold provide a local status screen. PostgreSQL schema and migrations, database health, and backend authentication are implemented. Dataset upload, evaluation, and the responsive login UI follow in later phases.
 
 ### Verify the PostgreSQL schema locally
 
@@ -81,6 +81,39 @@ $env:SCANPAY_MIGRATION_DATABASE_URL = $env:SCANPAY_TEST_DATABASE_URL
 For configuration via an environment file, copy `backend/.env.example` to `backend/.env`, update it with your dedicated synthetic connection string, and pass `--env-file backend/.env` when starting Uvicorn. Alembic reads process environment variables and prefers the direct migration URL. Use synthetic credentials in development and keep actual assessment processing in the separate private environment.
 
 When finished, stop the disposable Docker database with `docker stop scanpay-phase2-test`.
+
+### Verify authentication with a synthetic user
+
+Leave the synthetic database running and migrated. From the repository root, set the signing secret for your current PowerShell session and run the provisioning command. Enter a new synthetic password at the hidden prompt. Provision each reviewer separately using `ADMIN`, `ANALYST`, or `VIEWER` as appropriate.
+
+```powershell
+$env:SCANPAY_APP_MODE = 'local'
+$env:SCANPAY_DATABASE_URL = $env:SCANPAY_TEST_DATABASE_URL
+$env:SCANPAY_AUTH_SIGNING_SECRET = & .\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(48))"
+Push-Location backend
+try {
+    ..\.venv\Scripts\python.exe -m scripts.create_user --username synthetic-analyst --display-name 'Synthetic Analyst' --role ANALYST
+} finally { Pop-Location }
+.\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --app-dir backend --host 127.0.0.1 --port 8000 --no-access-log --no-proxy-headers
+```
+
+With Vite running on port 5173, run the following in the browser console on `http://127.0.0.1:5173`, or use an API client with a cookie jar and the same `Origin` header. Supply the password you entered when provisioning the synthetic account.
+
+```javascript
+const getCsrf = async () => (await (await fetch('/api/auth/csrf')).json()).csrf_token
+const password = prompt('Synthetic account password')
+const login = await fetch('/api/auth/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': await getCsrf() },
+  body: JSON.stringify({ username: 'synthetic-analyst', password }),
+})
+console.log(login.status, await (await fetch('/api/auth/me')).json())
+console.log((await fetch('/api/auth/logout', {
+  method: 'POST', headers: { 'X-CSRF-Token': await getCsrf() },
+})).status)
+```
+
+Expect 200 for login and `/me`, then 204 for logout and 401 for a subsequent `/me`. Logout revokes all sessions for the signed-in account. The [API design](docs/api-design.md#authentication-and-frontend-integration) covers cookie handling, frontend error handling, and rate-limit scope. Use `backend/.env.example` for configuration names. Auth routes require a signing secret. Demo mode also requires a database URL, Secure cookies and explicit HTTPS trusted origins.
 
 Use small, reviewable changes and Conventional Commits. See [AGENTS.md](AGENTS.md) for project conventions.
 
