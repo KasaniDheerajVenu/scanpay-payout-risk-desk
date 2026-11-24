@@ -1,0 +1,4 @@
+-r requirements.txt
+httpx2==2.16.2
+pytest==9.0.2
+ruff==0.15.5

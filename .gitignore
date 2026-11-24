@@ -1,6 +1,9 @@
 # Confidential assessment material
 /SCANPAY_CODEX_MASTER_PROMPT.md
 /codex_prompt.md
+/Payout_Risk_Desk_Candidate_Brief.pdf
+/2_history/
+/3_action_day/
 /private_data/
 
 # CSV files - allow only synthetic fixtures
@@ -20,6 +23,11 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+.coverage
+*.log
+*.db
+*.db-*
+*.sqlite*
 
 # Machine learning artifacts
 artifacts/

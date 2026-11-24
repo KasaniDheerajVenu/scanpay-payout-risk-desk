@@ -1,10 +1,10 @@
 # Payout Risk Desk risk engine design
 
-The risk engine runs in the local batch-processing command. It combines graph-based known-fraud detection, robust statistical comparisons, and a required Isolation Forest pipeline. The API reads the published results and never retrains. See [system design](system-design.md) and [database design](database-design.md) for deployment and persistence.
+The risk engine runs in an explicit evaluation service invoked by local CLI or an authorized UI request. PostgreSQL is its only source of risk data; files are not queried after import. It combines graph-based known-fraud detection, robust statistical comparisons, and a required Isolation Forest pipeline. The API reads the published results and never retrains. See [system design](system-design.md) and [database design](database-design.md) for deployment and persistence.
 
 ## Inputs and trust boundaries
 
-Use the five CSVs and the 13 November 2026 10:00 IST decision cutoff. The local developer verifies actual records and historical reasons privately; only synthetic records enter automated development or hosted demos. Join covered attempts by team and inclusive IST collection dates; captured amount plus tip and count must reconcile exactly before publication. Declined and refunded attempts remain available for analysis. Exclude incomplete historical windows from features requiring complete coverage. Use only outcomes known by the relevant historical cutoff. No pending records in training or threshold tuning.
+Use the selected READY import batch and explicit run cutoff (initial assessment: 13 November 2026 10:00 IST). Read accepted source rows and known dispositions in a consistent REPEATABLE READ snapshot; freeze membership, snapshot time, cutoff and digest. Active means accepted and available to this run, not team.status=active. No raw file retention. The local developer verifies actual records and historical reasons privately; only synthetic records enter automated development or hosted demos. Join covered attempts by team and inclusive IST collection dates; captured amount plus tip and count must reconcile exactly before publication. Declined and refunded attempts remain available for analysis. Exclude incomplete historical windows from features requiring complete coverage. Use only outcomes known by the relevant historical cutoff. No pending records in training or threshold tuning.
 
 ## Features and statistical learning
 
@@ -38,7 +38,7 @@ The brief does not require a particular ML model; the project explicitly require
 3. Evaluate on later observations against statistics-only baseline. Declare configurable sample/coverage/workload/actionability gates before validation. Report actual sample counts, review rates, verified-outlier detection, apparent normal alerts and flagged dollar exposure where calculable. Historical labels are imperfect; no unsupported accuracy or fraud probability claims. Do not optimize on the pending batch.
 4. Fit final model on eligible pre-action history if using a compatible threshold calibration policy; otherwise retain the validated fitted model. Record exact threshold policy and fit window. Score all eligible pending records with identical feature construction and fitted preprocessing. Use `-score_samples` (larger means more unusual), not a probability.
 5. Explain meaningful model flags using observed feature combinations, comparison values and supporting source IDs. Statistical deviation context is not formal model attribution. Only validated, material, actionable ML findings can cause Manual review. Diagnostic-only signals do not change decisions. ML never authorizes Reject.
-6. Persist `ml` and `model_metadata` inside the six-table design's original findings JSONB. Expose status and sanitized reasons. `ACTIVE` = eligible for decision influence; `DIAGNOSTIC_ONLY` = available score but no actionable/validated influence; `INSUFFICIENT_HISTORY`, `VALIDATION_FAILED`, `INFERENCE_FAILED` = explicit fallback conditions. Null score if unavailable. Failed quality gates never fabricate a score or silently disable the model. Use statistical/fraud fallback and review material uncertainty.
+6. Persist `ml` and `model_metadata` inside immutable payout_decisions fields/findings and model_versions metadata. Expose status and sanitized reasons. `ACTIVE` = eligible for decision influence; `DIAGNOSTIC_ONLY` = available score but no actionable/validated influence; `INSUFFICIENT_HISTORY`, `VALIDATION_FAILED`, `INFERENCE_FAILED` = explicit fallback conditions. Null score if unavailable. Failed quality gates never fabricate a score or silently disable the model. Use statistical/fraud fallback and review material uncertainty.
 
 ```mermaid
 flowchart TD
@@ -54,7 +54,7 @@ flowchart TD
     G[Known fraud graph evidence] --> P
 ```
 
-Version feature schema, configuration, algorithm, seed, cutoff, fit/validation windows, gate outcome, actual metrics and threshold. Include model configuration/version in publication digest; do not include wall-clock time. Fitted artifacts, if saved, stay in separate local private or synthetic storage, not Git, API or database.
+Version feature schema, configuration, algorithm, seed, cutoff, fit/validation windows, gate outcome, actual metrics and threshold. Include model configuration/version in evaluation digest; do not include wall-clock time. Fitted artifacts, if saved, stay in separate local private or synthetic storage, not Git, API or database.
 
 ## Final classification and explanations
 
@@ -64,8 +64,12 @@ Version feature schema, configuration, algorithm, seed, cutoff, fit/validation w
 | No | Yes | MANUAL_REVIEW, with evidence and next action |
 | No | No | APPROVE, with normal-behaviour context |
 
-An invalid batch blocks publication; no artificial fourth CSV decision. Retain all findings even if fraud takes precedence. Generate one or two plain-English sentences from deterministic templates and actual evidence. Validate IDs and relevance. Preserve immutable original decisions; scoped overrides append new events. Future learning from overrides requires explicit verification; never retrain on unverified reviewer activity. No LLM or supervised fraud classifier needed.
+An invalid batch blocks publication; no artificial fourth CSV decision. Retain all findings even if fraud takes precedence. Generate one or two plain-English sentences from deterministic templates and actual evidence. Validate IDs and relevance. Preserve immutable original decisions per run; scoped authenticated overrides append new events with actor, reason and version. A later run cannot alter earlier decisions. Only verified historical dispositions imported from trusted sources may feed future training; never retrain on unverified reviewer activity. No LLM or supervised fraud classifier needed.
 
 ## Acceptance checks
 
 Test normal and unusual behaviour at both scopes, sparse and zero baselines, multi-day comparability, missing identifiers, unrelated clusters, direct and corroborated exposure, victim cases, leakage-free features, reproducible model fit/score, actionable ML-only review, no ML-only rejection, fallback and metadata persistence, full reconciliation and correct decision CSV. Synthetic expected labels must be independently specified. Actual performance and fraud findings remain unverified until the developer runs the actual datasets privately.
+
+## Database-first lifecycle and model reuse
+
+Read source rows using repositories; pure feature/model functions receive typed in-memory observations, never file paths. Only historical approvals with disposition known by cutoff and imported by snapshot are candidates for normal training. Pending payouts may later become historical only via verified disposition import; automated Approve and analyst overrides are not historical ground truth. Suspended teams can contribute legitimate pre-suspension history if supported, and remain searchable for fraud evidence. Select the pending payout IDs from uploaded_files membership; do not score every database row or all prior pending batches. Retain prior runs for audit. Model fingerprint includes exact eligible observations and historical dispositions, feature schema, configuration, cutoff and policy. Persist model metadata and per-payout scores in PostgreSQL; optional trusted fitted artifact stays outside Git and DB. Reuse only an exact compatible model within its scope, otherwise train/refit. If no fitted artifact is available, deterministic refit is acceptable. No HTTP inference on every read. Store run manifest, model gate status and metrics; if training fails, retain explicit failure/fallback and publish valid evidence-backed decisions only. More records alone do not establish better accuracy.
