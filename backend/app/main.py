@@ -6,12 +6,14 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 
 from app.api.auth import router as auth_router
+from app.api.datasets import router as dataset_router
 from app.api.dependencies import enforce_api_security, private_api_response
 from app.api.health import router as health_router
 from app.core.config import Settings
-from app.core.errors import http_error, unexpected_errors, validation_error
+from app.core.errors import http_error, import_error, unexpected_errors, validation_error
 from app.core.logging import configure_logging, logger
 from app.database.session import Database
+from app.schemas.ingestion import ImportFailure
 from app.services.auth_service import AuthService
 
 
@@ -23,6 +25,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         configure_logging(settings.log_level)
+        app.state.settings = settings
         app.state.auth = AuthService(settings) if settings.auth_signing_secret is not None else None
         database = Database(settings) if settings.database_url is not None else None
         app.state.database = database
@@ -38,8 +41,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     application.include_router(health_router)
     application.include_router(auth_router)
+    application.include_router(dataset_router)
     application.add_exception_handler(HTTPException, http_error)
     application.add_exception_handler(RequestValidationError, validation_error)
+    application.add_exception_handler(ImportFailure, import_error)
     application.middleware("http")(unexpected_errors)
     application.middleware("http")(private_api_response)
     return application

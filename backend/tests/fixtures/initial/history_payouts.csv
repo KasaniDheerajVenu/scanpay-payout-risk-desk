@@ -1,0 +1,4 @@
+payout_id,team_id,created_at_ist,covers_from,covers_to,txn_count,payout_amount_usd,decision,decided_by,decided_at_ist,reason_code,reason
+000201,0001,2025-02-12 17:30:00,2025-02-08,2025-02-10,2,20.00,MANUAL_APPROVED,Fixture Analyst,2025-02-12 18:01:00,OUTLIER_VERIFIED,"Fictional invoice, verified.
+Second line."
+000202,0002,2025-02-12 17:30:00,2025-02-08,2025-02-10,1,28.00,REJECTED,Fixture Analyst,2025-02-12T12:45:00Z,FRAUD_CARD_RING,Fabricated fixture case.

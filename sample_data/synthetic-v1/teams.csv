@@ -1,0 +1,13 @@
+team_id,team_name,profession,owner_name,owner_phone,business_address,city,state,onboarded_on,status,suspended_on,payout_bank_routing,payout_bank_last4,signup_device_id
+DEMO-01,Imaginary Plumbing Workshop 1,Plumbing,Fictional Owner 1,0005550001,"1 Fictional Lane, Suite 1",Example Harbor,MA,2024-06-01,active,,000000019,0001,FAKE-DEVICE-1
+DEMO-02,Imaginary Locksmith Workshop 2,Locksmith,Fictional Owner 2,0005550002,"2 Fictional Lane, Suite 1",Example Harbor,MA,2024-06-01,active,,000000019,0002,
+DEMO-03,Imaginary HVAC Workshop 3,HVAC,Fictional Owner 3,0005550003,"3 Fictional Lane, Suite 1",Example Harbor,MA,2024-06-01,active,,000000019,0003,FAKE-DEVICE-3
+DEMO-04,Imaginary Electrical Workshop 4,Electrical,Fictional Owner 4,0005550004,"4 Fictional Lane, Suite 1",Example Harbor,MA,2024-06-01,active,,000000019,0004,
+DEMO-05,Imaginary Garage Door Workshop 5,Garage Door,Fictional Owner 5,0005550005,"5 Fictional Lane, Suite 1",Example Harbor,MA,2024-06-01,active,,000000019,0005,FAKE-DEVICE-5
+DEMO-06,Imaginary Appliance Repair Workshop 6,Appliance Repair,Fictional Owner 6,0005550006,"6 Fictional Lane, Suite 1",Example Harbor,MA,2024-06-01,active,,000000019,0006,
+DEMO-07,Imaginary Pest Control Workshop 7,Pest Control,Fictional Owner 7,0005550007,"7 Fictional Lane, Suite 1",Example Harbor,MA,2024-06-01,active,,000000019,0007,FAKE-DEVICE-7
+DEMO-08,Imaginary Handyman Workshop 8,Handyman,Fictional Owner 8,0005550008,"8 Fictional Lane, Suite 1",Example Harbor,MA,2024-06-01,suspended,2025-02-14,000000019,0008,
+DEMO-09,Fable Plumbing Services,Plumbing,Imaginary Owner 9,0006660009,9 Fable Road,Fiction Harbor,MA,2024-03-01,active,,000000029,0009,FAKE-PEER-DEVICE-9
+DEMO-10,Fable Locksmith Services,Locksmith,Imaginary Owner 10,0006660010,10 Fable Road,Fiction Harbor,MA,2024-03-01,active,,000000029,0010,FAKE-PEER-DEVICE-10
+DEMO-11,Fable HVAC Services,HVAC,Imaginary Owner 11,0006660011,11 Fable Road,Fiction Harbor,MA,2024-03-01,active,,000000029,0011,FAKE-PEER-DEVICE-11
+DEMO-12,Fable Electrical Services,Electrical,Imaginary Owner 12,0006660012,12 Fable Road,Fiction Harbor,MA,2024-03-01,active,,000000029,0012,FAKE-PEER-DEVICE-12

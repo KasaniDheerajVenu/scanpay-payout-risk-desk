@@ -23,7 +23,7 @@ The project uses a monorepo with a React/TypeScript frontend and a modular FastA
 .
 ├── backend/          # Planned: FastAPI, risk engine, persistence, tests
 ├── frontend/         # Planned: React dashboard and tests
-├── sample_data/      # Planned: entirely synthetic fixtures
+├── sample_data/      # Synthetic demo presets
 ├── docs/             # Requirements, architecture and API design
 ├── AGENTS.md         # Coding-agent and privacy guidelines
 ├── .gitignore
@@ -50,7 +50,7 @@ The assessment datasets are processed locally and must not be committed, uploade
 
 ## Development and deployment
 
-The frontend and FastAPI scaffold provide a local status screen. PostgreSQL schema and migrations, database health, and backend authentication are implemented. Dataset upload, evaluation, and the responsive login UI follow in later phases.
+The frontend and FastAPI scaffold provide a local status screen. PostgreSQL migrations, database health, authentication, and dataset import APIs are implemented. Evaluation and the responsive login and upload UI follow in later phases.
 
 ### Verify the PostgreSQL schema locally
 
@@ -116,6 +116,24 @@ console.log((await fetch('/api/auth/logout', {
 Expect 200 for login and `/me`, then 204 for logout and 401 for a subsequent `/me`. Logout revokes all sessions for the signed-in account. The [API design](docs/api-design.md#authentication-and-frontend-integration) covers cookie handling, frontend error handling, and rate-limit scope. Use `backend/.env.example` for configuration names. Auth routes require a signing secret. Demo mode also requires a database URL, Secure cookies and explicit HTTPS trusted origins.
 
 Use small, reviewable changes and Conventional Commits. See [AGENTS.md](AGENTS.md) for project conventions.
+
+### Import an independently fabricated dataset
+
+Start with a migrated disposable local PostgreSQL database. Set `SCANPAY_DATABASE_URL`, `SCANPAY_AUTH_SIGNING_SECRET`, and `SCANPAY_APP_MODE=local` in PowerShell. Provision a local application admin using the earlier instructions, then run the CLI from the repository root.
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path backend).Path
+$sample = 'sample_data/synthetic-v1'
+.\.venv\Scripts\python.exe -m scripts.import_dataset `
+    --username synthetic-admin --mode INITIAL --cutoff '2025-02-20T10:00:00+05:30' `
+    --teams "$sample/teams.csv" --history-transactions "$sample/history_transactions.csv" `
+    --history-payouts "$sample/history_payouts.csv" --latest-transactions "$sample/latest_transactions.csv" `
+    --pending-payouts "$sample/pending_payouts.csv"
+```
+
+Enter the local admin's application password at the hidden prompt. The command prints the batch ID and status. Repeating it returns the same ID with `"created": false`. Incremental imports use `--mode INCREMENTAL` with an explicit cutoff, `--latest-transactions`, and `--pending-payouts`. The other typed files are optional after an initial import. Use `--assessment` for the original 24-team and 20-payout count check. The synthetic preset uses general mode.
+
+The hosted API accepts the bundled `synthetic-v1` preset. Package `sample_data/synthetic-v1` alongside the application when wiring deployment. [Dataset API contracts](docs/api-design.md#dataset-requests-and-responses) cover multipart fields, CSRF, responses, and failure behavior.
 
 ## Database-first workflow
 
