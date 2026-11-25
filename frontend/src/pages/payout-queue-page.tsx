@@ -1,5 +1,5 @@
 import { ArrowUpRight, ChevronLeft, ChevronRight, ListChecks, Search } from "lucide-react"
-import { useState, type FormEvent } from "react"
+import { useLayoutEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useSearchParams } from "react-router"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -33,6 +33,8 @@ function SearchControl({ search, onSearch }: { search: string; onSearch: (value:
 function QueueResults({ runId }: { runId: string }) {
   const { user } = useWorkspace()
   const [params, setParams] = useSearchParams()
+  const latestParams = useRef(params)
+  useLayoutEffect(() => { latestParams.current = params }, [params])
   const search = (params.get("search") ?? "").slice(0, 128)
   const decisionValue = params.get("decision") ?? ""
   const decision = decisions.includes(decisionValue) ? decisionValue : ""
@@ -46,13 +48,13 @@ function QueueResults({ runId }: { runId: string }) {
   if (decision) filters.decision = decision
   const queue = useRiskQuery(runId, ["queue", filters], (signal) => getQueue(runId, filters, signal))
   function change(key: string, value: string) {
-    setParams((previous) => {
-      const next = new URLSearchParams(previous)
-      if (key !== "offset") next.delete("offset")
-      if (value) next.set(key, value)
-      else next.delete(key)
-      return next
-    })
+    // Router navigations can render after another filter change has arrived.
+    const next = new URLSearchParams(latestParams.current)
+    if (key !== "offset") next.delete("offset")
+    if (value) next.set(key, value)
+    else next.delete(key)
+    latestParams.current = next
+    setParams(next)
   }
   const data = queue.data
   return <>

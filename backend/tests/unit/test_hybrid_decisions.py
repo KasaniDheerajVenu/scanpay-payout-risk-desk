@@ -4,7 +4,7 @@ from decimal import Decimal
 import pytest
 from test_statistics import POLICY, attempt, feature_row, raw
 
-from app.models.values import Decision, MLStatus
+from app.models.values import Decision, MLStatus, PaymentMethod
 from app.risk_engine.feature_schema import FEATURE_VERSION, Direction, Feature, Unit
 from app.risk_engine.features import extract_features
 from app.risk_engine.hybrid_decisions import decide
@@ -141,3 +141,27 @@ def test_tracks_statistical_findings_even_when_fraud_takes_precedence():
     rejected = decide(large, fraud_finding(Exposure.ESTABLISHED), ml_finding(MLStatus.ACTIVE))
     assert rejected.decision == Decision.REJECT and rejected.cluster_key == "known-case"
     assert rejected.statistics == large and rejected.ml.qualifies_for_review
+
+
+@pytest.mark.parametrize(
+    ("method", "amounts", "reason"),
+    [
+        (PaymentMethod.ACH, (20_000,), "invoice or job record"),
+        (PaymentMethod.CARD, (20_000,), "invoice or job record"),
+        (PaymentMethod.CARD, (10_000,) * 6, "typical ticket size remained"),
+    ],
+)
+def test_cites_exceptional_ticket_or_volume_even_when_signals_overlap(method, amounts, reason):
+    def features(key, weeks, values, payment):
+        day = raw(key, weeks=weeks).payout.covers_from
+        payments = tuple(
+            attempt(f"{key}-{i}", cents=value, method=payment, day=day, fingerprint=f"card-{i}")
+            for i, value in enumerate(values)
+        )
+        return extract_features(raw(key, weeks=weeks, attempts=payments), POLICY)
+
+    cohort = tuple(features(f"past-{week}", week, (10_000, 10_000), method) for week in range(1, 7))
+    stats = analyze_observation(features("pending", 0, amounts, method), cohort, POLICY)
+    result = decide(stats, fraud_finding(), ml_finding())
+    assert result.decision == Decision.MANUAL_REVIEW and result.cluster_key is None
+    assert reason in result.reason and "pending-0" in {item.id for item in result.evidence}

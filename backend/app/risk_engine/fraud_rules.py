@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import networkx as nx
 
-from app.models.values import PaymentMethod, ReasonCode, TransactionStatus
+from app.models.values import HistoricalDecision, PaymentMethod, ReasonCode, TransactionStatus
 from app.risk_engine.fraud_evidence import POLICY_VERSION, Seed, card_key, case_refs, refs
 from app.risk_engine.fraud_graph import Node, evidence_path, pending_attempts
 from app.risk_engine.inputs import Attempt, EvaluationInputs, PendingObservation
@@ -294,6 +294,8 @@ def assess_pending(
     attempts = tuple(sorted(pending_attempts(inputs, row).values(), key=lambda item: item.txn_id))
     victim = any(
         prior.payout.team_id == row.payout.team_id
+        and prior.disposition.decision
+        in {HistoricalDecision.AUTO_APPROVED, HistoricalDecision.MANUAL_APPROVED}
         and prior.disposition.reason_code == ReasonCode.CARD_TESTING_VICTIM
         and prior.disposition.decided_at <= inputs.batch.cutoff
         and prior.disposition.available_at <= inputs.snapshot_at

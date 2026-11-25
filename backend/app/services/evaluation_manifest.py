@@ -80,6 +80,11 @@ def fingerprint(inputs: EvaluationInputs) -> str:
                 key=lambda row: (row.team_id, row.collection_date, row.first_available_at),
             )
         ]
+    if inputs.historical_fraud_attempts:
+        payload["historical_fraud_attempts"] = [
+            asdict(item)
+            for item in sorted(inputs.historical_fraud_attempts, key=lambda row: row.txn_id)
+        ]
     return sha256(canonical_json(payload).encode("utf-8")).hexdigest()
 
 
@@ -145,5 +150,9 @@ def history_manifest(inputs: EvaluationInputs) -> EvaluationManifest:
             attempt.txn_id: str(attempt.provenance.import_batch_id)
             for row in (*inputs.pending, *inputs.history)
             for attempt in row.attempts
+        },
+        "fraud_witness_import_batches": {
+            item.txn_id: str(item.provenance.import_batch_id)
+            for item in inputs.historical_fraud_attempts
         },
     }

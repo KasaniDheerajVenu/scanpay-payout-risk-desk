@@ -215,6 +215,7 @@ class EvaluationInputs:
     fraud_candidates: tuple[HistoricalObservation, ...]
     monitoring: MonitoringInput
     historical_collection_days: tuple[CollectionAvailability, ...] = ()
+    historical_fraud_attempts: tuple[Attempt, ...] = ()
 
     @property
     def normal_candidates(self) -> tuple[HistoricalObservation, ...]:

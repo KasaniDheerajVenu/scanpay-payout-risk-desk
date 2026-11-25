@@ -1,3 +1,5 @@
+import { apiCredentials, apiUrl } from "./api-origin"
+
 type ErrorDetails = { code?: string; file_type?: string; row?: number; field?: string }
 
 export class ApiError extends Error {
@@ -48,8 +50,8 @@ async function send(path: `/api/${string}`, options: Options, accept: string) {
   }
   const form = body instanceof FormData
   if (body && !form) headers.set("Content-Type", "application/json")
-  const response = await fetch(path, {
-    headers, signal, credentials: "same-origin", method: write ? "POST" : "GET",
+  const response = await fetch(apiUrl(path), {
+    headers, signal, credentials: apiCredentials, method: write ? "POST" : "GET",
     body: form ? body : body ? JSON.stringify(body) : undefined,
   })
   if (!response.ok) {
@@ -69,6 +71,7 @@ async function send(path: `/api/${string}`, options: Options, accept: string) {
 const issueLabels: Record<string, string> = {
   bad_header: "The CSV columns do not match the required schema.",
   invalid_header: "The CSV columns do not match the required schema.",
+  duplicate_settlement_payout: "A team can have only one payout per IST settlement day.",
   missing_file: "A required CSV file is missing.",
   empty_file: "The CSV file is empty.",
   invalid_value: "A field contains an invalid value.",

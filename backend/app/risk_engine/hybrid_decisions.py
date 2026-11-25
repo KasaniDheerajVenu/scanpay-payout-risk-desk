@@ -8,7 +8,7 @@ from app.schemas.ml_findings import MLFinding
 from app.schemas.risk_findings import ComparisonStatus, StatisticalFinding
 from app.services.statistical_analysis_service import ObservationAnalysis
 
-RULE_VERSION = "hybrid-v1"
+RULE_VERSION = "hybrid-v2"
 REQUIRED_NORMAL_CONTEXT = (Feature.PAYOUT_CENTS, Feature.CAPTURED_COUNT)
 
 
@@ -36,6 +36,38 @@ def statistical_evidence(item: StatisticalFinding) -> tuple[EvidenceRef, ...]:
     )
 
 
+def payment_anomaly_reason(
+    anomaly: StatisticalFinding, stats: ObservationAnalysis
+) -> tuple[str, tuple[EvidenceRef, ...]]:
+    label = DEFINITIONS[anomaly.feature].label
+    observed = format_value(anomaly.observed, anomaly.unit)
+    median = format_value(anomaly.baseline.median, anomaly.unit)
+    scope = anomaly.baseline.scope.value.lower()
+    reason = f"{label} was {observed} versus a comparable {scope} median of {median}."
+    evidence = statistical_evidence(anomaly)
+    if anomaly.feature == Feature.MAX_BASE_CENTS:
+        return f"{reason} Verify the cited payment against its invoice or job record.", evidence
+    if anomaly.feature == Feature.CAPTURED_COUNT and anomaly.observed > anomaly.baseline.median:
+        same_scope = next(
+            (
+                item
+                for pair in stats.comparisons
+                for item in (pair.team, pair.profession)
+                if item.feature == Feature.MEDIAN_BASE_CENTS
+                and item.baseline.scope == anomaly.baseline.scope
+                and item.status in {ComparisonStatus.IN_RANGE, ComparisonStatus.NONMATERIAL}
+            ),
+            None,
+        )
+        if same_scope is not None:
+            return (
+                f"{reason} Verify the rise in payment volume; typical ticket size remained "
+                f"within materiality limits for that comparison.",
+                (*evidence, *statistical_evidence(same_scope)),
+            )
+    return f"{reason} Review the cited payments for a legitimate explanation.", evidence
+
+
 def decide(stats: ObservationAnalysis, fraud: FraudFinding, ml: MLFinding) -> DecisionDraft:
     payout = stats.observation
     primary = fraud.primary
@@ -47,8 +79,15 @@ def decide(stats: ObservationAnalysis, fraud: FraudFinding, ml: MLFinding) -> De
         reason = fraud.explanation
         context = (*primary.current_evidence, *primary.historical_evidence)
     else:
+        anomalies = tuple(
+            item for item in stats.findings if item.status == ComparisonStatus.ANOMALY
+        )
         anomaly = next(
-            (item for item in stats.findings if item.status == ComparisonStatus.ANOMALY), None
+            (item for item in anomalies if item.feature == Feature.MAX_BASE_CENTS),
+            next(
+                (item for item in anomalies if item.feature == Feature.CAPTURED_COUNT),
+                next(iter(anomalies), None),
+            ),
         )
         ml_review = (
             ml.status == MLStatus.ACTIVE
@@ -80,15 +119,7 @@ def decide(stats: ObservationAnalysis, fraud: FraudFinding, ml: MLFinding) -> De
                 for ref in (*lead.current_evidence, *lead.historical_evidence)
             )
         elif anomaly is not None:
-            label = DEFINITIONS[anomaly.feature].label
-            observed = format_value(anomaly.observed, anomaly.unit)
-            median = format_value(anomaly.baseline.median, anomaly.unit)
-            scope = anomaly.baseline.scope.value.lower()
-            reason = (
-                f"{label} was {observed} versus a comparable {scope} median of {median}. "
-                "Review the cited payments for a legitimate explanation."
-            )
-            context = statistical_evidence(anomaly)
+            reason, context = payment_anomaly_reason(anomaly, stats)
         elif ml_review:
             comparison = ml.unusual_features[0].comparison
             reason = (

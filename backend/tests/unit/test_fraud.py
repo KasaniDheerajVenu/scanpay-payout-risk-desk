@@ -32,6 +32,7 @@ from app.services.fraud_analysis_service import (
     fraud_config,
 )
 from app.services.statistical_analysis_service import HistoryUse
+from scripts.evaluate_batch import load_mapping
 
 RING = ReasonCode.FRAUD_CARD_RING
 TESTING = ReasonCode.FRAUD_CARD_TESTING
@@ -99,6 +100,105 @@ def seed(key, owner, card, weeks=5, *, reason=RING, evidence=None, extra=(), dec
 
 def inputs(history, current, *teams):
     return replace(snapshot(history, current), teams=teams)
+
+
+def test_local_reviewed_mapping_loads_ids_and_requires_a_timezone(tmp_path):
+    path = tmp_path / "case-review.json"
+    valid = (
+        '{"version":"synthetic-v1","cases":[{"seed_payout_id":"case-1",'
+        '"transaction_ids":["txn-1"],"available_at":"2025-03-05T09:00:00+05:30",'
+        '"implicated_profile_kinds":["signup_device"]}]}'
+    )
+    path.write_text(valid, encoding="utf-8")
+    mapping = load_mapping(path)
+    assert mapping.cases[0].transaction_ids == ("txn-1",)
+    assert mapping.cases[0].implicated_profile_kinds == (NodeKind.DEVICE,)
+    path.write_text(valid.replace("+05:30", ""), encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_mapping(path)
+
+
+@pytest.mark.parametrize("issue", [None, "ambiguous_case_team", "ambiguous_case_description"])
+def test_named_ring_requires_unique_teams_and_shared_captured_cards(issue):
+    note = "The same 2 cards paid Maple Workshop and Cedar Works."
+    if issue == "ambiguous_case_description":
+        note = "It is unclear whether the same 2 cards paid Maple Workshop and Cedar Works."
+    source = seed(
+        "ring",
+        "one",
+        "shared-first",
+        evidence=note,
+        extra=(tx("second", "one", "shared-second", 5), tx("incidental", "one", "other", 5)),
+    )
+    peer = historical(
+        raw(
+            "peer",
+            team="two",
+            weeks=5,
+            attempts=(
+                tx("peer-first", "two", "shared-first", 5),
+                tx("peer-second", "two", "shared-second", 5),
+            ),
+        )
+    )
+    current = pending("new", "three", tx("new-tx", "three", "shared-first"))
+    metadata = (
+        replace(team("one"), team_name="Maple Workshop"),
+        replace(team("two"), team_name="Cedar Works"),
+        replace(
+            team("three"),
+            team_name="Cedar Works" if issue == "ambiguous_case_team" else "Birch Repair",
+        ),
+    )
+    data = inputs((source, peer), current, *metadata)
+    resolved, unresolved = resolve_seeds(data)
+    result = analyze_fraud(data)
+    if issue:
+        assert not resolved and unresolved[0].code == issue
+        assert not result.pending[0].established_exposure
+    else:
+        assert not unresolved
+        assert {item.txn_id for item in resolved[0].attempts} == {"ring-tx", "second"}
+        assert {item.txn_id for item in resolved[0].witnesses} == {"peer-first", "peer-second"}
+        assert result.pending[0].established_exposure
+
+
+@pytest.mark.parametrize("after_capture", [False, True])
+def test_named_testing_requires_earlier_small_attempts_on_each_peer(after_capture):
+    row = seed(
+        "testing",
+        "one",
+        "cross-card",
+        reason=TESTING,
+        evidence="1 card ran $2-4 test charges at Cedar Works and Birch Repair, "
+        "then was charged $900+ here.",
+    )
+    row = replace(
+        row,
+        attempts=(replace(row.attempts[0], amount_cents=100_000),),
+    )
+    anchor = row.attempts[0]
+    history = [row]
+    for key, status in (("two", DECLINED), ("three", REFUNDED)):
+        minutes = 15 if after_capture and key == "three" else -15
+        witness = replace(
+            tx(f"attempt-{key}", key, "cross-card", 5, status),
+            amount_cents=300,
+            created_at=anchor.created_at + timedelta(minutes=minutes),
+        )
+        history.append(historical(raw(f"old-{key}", team=key, weeks=5, attempts=(witness,))))
+    data = inputs(
+        tuple(history),
+        pending("new", "four", tx("current", "four", "cross-card")),
+        replace(team("one"), team_name="Maple Workshop"),
+        replace(team("two"), team_name="Cedar Works"),
+        replace(team("three"), team_name="Birch Repair"),
+    )
+    resolved, unresolved = resolve_seeds(data)
+    assert bool(resolved) is not after_capture
+    assert bool(unresolved) is after_capture
+    if resolved:
+        assert {item.status for item in resolved[0].witnesses} == {DECLINED, REFUNDED}
 
 
 def test_only_verified_card_certificates_merge_cases_in_stable_components():

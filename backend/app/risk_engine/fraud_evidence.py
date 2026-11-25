@@ -1,8 +1,9 @@
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
-from app.models.values import PaymentMethod, ReasonCode
+from app.models.values import PaymentMethod, ReasonCode, TransactionStatus
 from app.risk_engine.eligibility import is_fraud_seed
 from app.risk_engine.inputs import (
     Attempt,
@@ -23,7 +24,10 @@ DIRECTIVES = {
     "signup device": NodeKind.DEVICE,
     "bank routing and last4": NodeKind.BANK,
 }
-POLICY_VERSION = "fraud-evidence-v1"
+POLICY_VERSION = "fraud-evidence-v2"
+TEST_SEQUENCE_WINDOW = timedelta(hours=2)
+CASE_CLOCK_TOLERANCE_MINUTES = 15
+CASE_TIME_ZONE = ZoneInfo("Asia/Kolkata")
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -46,6 +50,7 @@ class Seed:
     attempts: tuple[Attempt, ...]
     implicated_profiles: frozenset[NodeKind]
     available_at: datetime
+    witnesses: tuple[Attempt, ...] = ()
 
     @property
     def payout_id(self) -> str:
@@ -72,10 +77,15 @@ def refs(*entries: tuple[EvidenceType, str]) -> tuple[EvidenceRef, ...]:
 
 def case_refs(seed: Seed, attempt: Attempt | None = None) -> tuple[EvidenceRef, ...]:
     attempts = seed.attempts if attempt is None else (attempt,)
+    witnesses = tuple(
+        row for row in seed.witnesses if attempt is None or card_key(row) == card_key(attempt)
+    )
     return refs(
         (EvidenceType.PAYOUT, seed.payout_id),
         (EvidenceType.TEAM, seed.team_id),
         *((EvidenceType.TRANSACTION, row.txn_id) for row in attempts),
+        *((EvidenceType.TRANSACTION, row.txn_id) for row in witnesses),
+        *((EvidenceType.TEAM, row.team_id) for row in witnesses),
     )
 
 
@@ -152,6 +162,150 @@ def note_evidence(
     return transaction_ids, implicated, None
 
 
+def normalized_words(value: str) -> str:
+    return " ".join(re.findall(r"[^\W_]+", value.casefold()))
+
+
+def matches_witness_clues(
+    attempt: Attempt, anchor: Attempt, foreign: bool, clock_minutes: int | None
+) -> bool:
+    if foreign:
+        country = (anchor.card_country or "").strip().upper()
+        if (
+            not re.fullmatch(r"[A-Z]{2}", country)
+            or country == "US"
+            or (attempt.card_country or "").strip().upper() != country
+        ):
+            return False
+    if clock_minutes is None:
+        return True
+    local = attempt.created_at.astimezone(CASE_TIME_ZONE)
+    distance = abs(local.hour * 60 + local.minute - clock_minutes)
+    return min(distance, 24 * 60 - distance) <= CASE_CLOCK_TOLERANCE_MINUTES
+
+
+def reconstruct_cards(
+    row: HistoricalObservation,
+    available: dict[str, Attempt],
+    inputs: EvaluationInputs,
+    teams: dict[str, TeamInput],
+) -> tuple[set[str], tuple[Attempt, ...], str | None]:
+    """Corroborate narrow, quantified descriptions against historical payment records."""
+    raw_note = (row.disposition.reason or "").casefold()
+    note = normalized_words(raw_note)
+    ring = row.disposition.reason_code == ReasonCode.FRAUD_CARD_RING
+    testing = row.disposition.reason_code == ReasonCode.FRAUD_CARD_TESTING
+    count = re.search(r"\b([1-9][0-9]{0,2}) (foreign )?cards?\b", note)
+    amounts = re.search(
+        r"\$([0-9]{1,6})\s*[-–]\s*\$?([0-9]{1,6})\s+test charges\s+at\s+(.+?)\s+"
+        r"then (?:(?:was|were) )?charged\s+\$([0-9]{1,6}(?:,[0-9]{3})?)\+",
+        raw_note,
+    )
+    if not count or not (
+        (ring and f"same {count[0]}" in note and "paid" in note and int(count[1]) >= 2)
+        or (testing and amounts)
+    ):
+        return set(), (), None
+    if re.search(r"\b(?:not|unclear|unconfirmed|unknown|possibly)\b", note):
+        return set(), (), "ambiguous_case_description"
+    minimum, maximum, large = (0, 0, 0)
+    participants = note
+    clock_minutes = None
+    if testing and amounts:
+        minimum, maximum, large = (
+            int(amounts[group].replace(",", "")) * 100 for group in (1, 2, 4)
+        )
+        participants = normalized_words(amounts[3])
+        clock = re.search(r"\baround\s+(1[0-2]|[1-9]):([0-5][0-9])\s*(am|pm)\s+ist\b", raw_note)
+        if clock:
+            clock_minutes = (int(clock[1]) % 12 + 12 * (clock[3] == "pm")) * 60 + int(clock[2])
+        elif " around " in f" {participants} ":
+            return set(), (), "unconfirmed_case_time"
+        if not 0 < minimum <= maximum < large:
+            return set(), (), "invalid_case_amounts"
+
+    named: dict[str, list[str]] = {}
+    for team in teams.values():
+        name = normalized_words(team.team_name)
+        if name and f" {name} " in f" {participants} ":
+            named.setdefault(name, []).append(team.team_id)
+    if any(len(matches) != 1 for matches in named.values()):
+        return set(), (), "ambiguous_case_team"
+    subject = row.payout.team_id
+    named_ids = {matches[0] for matches in named.values()}
+    peers = named_ids - {subject}
+    if (
+        subject not in teams
+        or (ring and subject not in named_ids)
+        or len(peers) < (2 if testing else 1)
+    ):
+        return set(), (), None
+    if ring and "device" in note:
+        device = profile_keys(teams[subject]).get(NodeKind.DEVICE)
+        if (
+            not device
+            or f" {normalized_words(device)} " not in f" {note} "
+            or any(profile_keys(teams[key]).get(NodeKind.DEVICE) != device for key in peers)
+        ):
+            return set(), (), "unconfirmed_case_device"
+
+    by_card: dict[str, dict[str, dict[str, Attempt]]] = {}
+    for history in inputs.history:
+        team_id = history.payout.team_id
+        if team_id not in peers:
+            continue
+        for item in visible_attempts(
+            history, row.disposition.decided_at, inputs.snapshot_at
+        ).values():
+            if (key := card_key(item)) is not None:
+                by_card.setdefault(key, {}).setdefault(team_id, {})[item.txn_id] = item
+    if testing:
+        for item in inputs.historical_fraud_attempts:
+            if (
+                item.team_id in peers
+                and item.created_at <= row.disposition.decided_at
+                and item.provenance.imported_at <= inputs.snapshot_at
+                and (key := card_key(item)) is not None
+            ):
+                by_card.setdefault(key, {}).setdefault(item.team_id, {})[item.txn_id] = item
+
+    matched: dict[str, dict[str, Attempt]] = {}
+    anchors: set[str] = set()
+    for item in available.values():
+        key = card_key(item)
+        if item.status != TransactionStatus.CAPTURED or key is None:
+            continue
+        evidence = {}
+        for peer in peers:
+            candidates = by_card.get(key, {}).get(peer, {}).values()
+            related = [
+                other
+                for other in candidates
+                if (
+                    ring
+                    and other.status == TransactionStatus.CAPTURED
+                    and other.collection_date == item.collection_date
+                )
+                or (
+                    testing
+                    and timedelta() < item.created_at - other.created_at <= TEST_SEQUENCE_WINDOW
+                    and minimum <= other.amount_cents <= maximum
+                    and item.amount_cents >= large
+                    and matches_witness_clues(other, item, bool(count[2]), clock_minutes)
+                )
+            ]
+            if not related:
+                break
+            evidence.update((other.txn_id, other) for other in related)
+        else:
+            matched.setdefault(key, {}).update(evidence)
+            anchors.add(item.txn_id)
+    if len(matched) != int(count[1]):
+        return set(), (), "unconfirmed_case_pattern"
+    witnesses = {item.txn_id: item for group in matched.values() for item in group.values()}
+    return anchors, tuple(witnesses[key] for key in sorted(witnesses)), None
+
+
 def mapping_index(mapping: CaseMapping | None) -> dict[str, MappedCase]:
     if mapping is None:
         return {}
@@ -194,6 +348,7 @@ def resolve_seeds(
     }
     seeds, unresolved = [], []
     for key, row in sorted(selected.items()):
+        witnesses: tuple[Attempt, ...] = ()
         available = visible_attempts(row, inputs.batch.cutoff, inputs.snapshot_at)
         profiles = profile_keys(teams.get(row.payout.team_id))
         recognized_at = max(row.disposition.available_at, row.payout.provenance.imported_at)
@@ -217,6 +372,15 @@ def resolve_seeds(
             recognized_at = mapped_case.available_at
         else:
             ids, profile_kinds, issue = note_evidence(row, available, profiles)
+            if not ids and issue is None:
+                ids, witnesses, issue = reconstruct_cards(row, available, inputs, teams)
+                if witnesses:
+                    recognized_at = max(
+                        recognized_at,
+                        *(item.provenance.imported_at for item in witnesses),
+                        *(teams[item.team_id].provenance.imported_at for item in witnesses),
+                        teams[row.payout.team_id].provenance.imported_at,
+                    )
         if not ids:
             unresolved.append(
                 UnresolvedSeed(
@@ -234,6 +398,7 @@ def resolve_seeds(
                 tuple(available[item] for item in sorted(ids)),
                 frozenset(profile_kinds),
                 recognized_at,
+                witnesses,
             )
         )
     return tuple(seeds), tuple(unresolved)

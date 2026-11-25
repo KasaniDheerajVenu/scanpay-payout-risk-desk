@@ -21,7 +21,8 @@ def parse(kind: FileType, data: bytes):
 
 @pytest.mark.parametrize("kind", list(FileType))
 def test_normalizes_all_source_columns(kind: FileType) -> None:
-    parsed = parse(kind, b"\xef\xbb\xbf" + (INITIAL / f"{kind}.csv").read_bytes())
+    source = (INITIAL / f"{kind}.csv").read_bytes().replace(b"\r\n", b"\n")
+    parsed = parse(kind, b"\xef\xbb\xbf" + source)
     first = parsed.rows[0].values
     expected = {column for _, column, _ in SCHEMAS[kind]}
     derived = {"created_date_ist", "collection_date_ist"} & first.keys()
@@ -45,6 +46,16 @@ def test_normalizes_all_source_columns(kind: FileType) -> None:
         assert parsed.rows[1].values["historical_decided_at"] == datetime(
             2025, 2, 12, 12, 45, tzinfo=UTC
         )
+
+
+@pytest.mark.parametrize("ending", [b"\n", b"\r\n"])
+def test_quoted_reason_preserves_multiline_text_and_physical_row_numbers(ending: bytes) -> None:
+    source = (INITIAL / "history_payouts.csv").read_bytes().replace(b"\r\n", b"\n")
+    parsed = parse(FileType.HISTORY_PAYOUTS, source.replace(b"\n", ending))
+    assert parsed.rows[0].values["historical_reason"] == (
+        f"Fictional invoice, verified.{ending.decode()}Second line."
+    )
+    assert parsed.rows[1].line == 4
 
 
 def test_nullable_suspension_dates_preserve_historical_context() -> None:

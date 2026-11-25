@@ -1,9 +1,11 @@
+import { apiUrl } from "./api-origin"
+
 export type HealthResponse = {
   status: "ok"
 }
 
 export async function getHealth(signal?: AbortSignal): Promise<HealthResponse> {
-  const response = await fetch("/health", {
+  const response = await fetch(apiUrl("/health"), {
     headers: { Accept: "application/json" },
     signal,
     cache: "no-store",

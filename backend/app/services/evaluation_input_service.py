@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.permissions import Permission, effective_permissions
 from app.core.review_scope import ActorContext
 from app.database.session import Database
-from app.models import DatasetBatch
+from app.models import DatasetBatch, Transaction
 from app.models.values import (
     BatchMode,
     BatchStatus,
@@ -27,6 +27,7 @@ from app.repositories import evaluation_inputs as repository
 from app.repositories.datasets import get_batch
 from app.repositories.sources import TeamDay
 from app.risk_engine.eligibility import historical_eligibility, is_fraud_seed, monitoring_input
+from app.risk_engine.fraud_evidence import TEST_SEQUENCE_WINDOW, card_key, normalized_words
 from app.risk_engine.inputs import (
     Attempt,
     CollectionAvailability,
@@ -42,6 +43,7 @@ from app.risk_engine.inputs import (
     TeamInput,
 )
 from app.schemas.evaluation import EvaluationError
+from app.services.csv_source import IST
 from app.services.ingestion_service import dataset_scope
 from app.services.reconciliation_service import (
     payable_mismatch,
@@ -152,6 +154,24 @@ def team_inputs(session: Session, scope: str, ids: set[str]) -> dict[str, TeamIn
     return records
 
 
+def attempt_input(item: Transaction, accepted_at: datetime) -> Attempt:
+    return Attempt(
+        item.txn_id,
+        item.team_id,
+        item.created_at,
+        item.collection_date_ist,
+        item.amount_cents,
+        item.tip_cents,
+        PaymentMethod(item.payment_method),
+        item.card_fingerprint,
+        item.card_country,
+        TransactionStatus(item.status),
+        item.customer_name,
+        item.customer_zip,
+        Provenance(item.first_import_batch_id, accepted_at, item.ingested_at),
+    )
+
+
 def read_covered_attempts(
     session: Session, batch: SelectedBatch, payouts: list[PayoutInput], *, pending: bool
 ) -> dict[str, tuple[Attempt, ...]]:
@@ -181,23 +201,7 @@ def read_covered_attempts(
     for item, accepted_at in repository.read_attempts(
         session, batch.scope_key, team_days, batch.cutoff, batch.imported_at if pending else None
     ):
-        grouped[item.team_id, item.collection_date_ist].append(
-            Attempt(
-                item.txn_id,
-                item.team_id,
-                item.created_at,
-                item.collection_date_ist,
-                item.amount_cents,
-                item.tip_cents,
-                PaymentMethod(item.payment_method),
-                item.card_fingerprint,
-                item.card_country,
-                TransactionStatus(item.status),
-                item.customer_name,
-                item.customer_zip,
-                Provenance(item.first_import_batch_id, accepted_at, item.ingested_at),
-            )
-        )
+        grouped[item.team_id, item.collection_date_ist].append(attempt_input(item, accepted_at))
     results = {}
     for payout in payouts:
         covered = []
@@ -280,6 +284,58 @@ def select_pending(
     )
 
 
+def testing_witnesses(
+    session: Session,
+    batch: SelectedBatch,
+    snapshot_at: datetime,
+    teams: dict[str, TeamInput],
+    seeds: tuple[HistoricalObservation, ...],
+) -> tuple[Attempt, ...]:
+    windows: dict[tuple[str, str], set[datetime]] = defaultdict(set)
+    days: set[TeamDay] = set()
+    for seed in seeds:
+        if seed.disposition.reason_code != ReasonCode.FRAUD_CARD_TESTING:
+            continue
+        note = f" {normalized_words(seed.disposition.reason or '')} "
+        if " test charges at " not in note:
+            continue
+        peers = [
+            team.team_id
+            for team in teams.values()
+            if team.team_id != seed.payout.team_id
+            and (name := normalized_words(team.team_name))
+            and f" {name} " in note
+        ]
+        if not peers:
+            continue
+        for attempt in seed.attempts:
+            key = card_key(attempt)
+            if (
+                not key
+                or attempt.status != TransactionStatus.CAPTURED
+                or attempt.created_at > seed.payout.created_at
+            ):
+                continue
+            start = attempt.created_at - TEST_SEQUENCE_WINDOW
+            for peer in peers:
+                windows[peer, key].add(attempt.created_at)
+                days.update(
+                    (peer, point.astimezone(IST).date()) for point in (start, attempt.created_at)
+                )
+    result = []
+    for item, accepted_at in repository.read_attempts(
+        session, batch.scope_key, days, batch.cutoff, snapshot_at
+    ):
+        attempt = attempt_input(item, accepted_at)
+        key = card_key(attempt)
+        if key and any(
+            anchor - TEST_SEQUENCE_WINDOW <= attempt.created_at < anchor
+            for anchor in windows.get((attempt.team_id, key), ())
+        ):
+            result.append(attempt)
+    return tuple(sorted(result, key=lambda row: row.txn_id))
+
+
 def materialize(
     session: Session, scope: str, batch_id: UUID, snapshot_at: datetime, config: EvaluationConfig
 ) -> EvaluationInputs:
@@ -301,9 +357,22 @@ def materialize(
                 raise EvaluationError("historical_window_overlaps_action")
             past.append((payout, disposition))
 
-    teams = team_inputs(
-        session, scope, {row.team_id for row in pending_payouts} | {row.team_id for row, _ in past}
-    )
+    team_ids = {row.team_id for row in pending_payouts} | {row.team_id for row, _ in past}
+    case_notes = [
+        f" {normalized_words(disposition.reason)} "
+        for _, disposition in past
+        if is_fraud_seed(disposition)
+        and disposition.reason_code in {ReasonCode.FRAUD_CARD_RING, ReasonCode.FRAUD_CARD_TESTING}
+        and disposition.reason
+    ]
+    if case_notes:
+        team_ids.update(
+            key
+            for key, name in repository.read_team_names(session, scope)
+            if (match := normalized_words(name))
+            and any(f" {match} " in note for note in case_notes)
+        )
+    teams = team_inputs(session, scope, team_ids)
     pending_attempts = read_covered_attempts(session, batch, pending_payouts, pending=True)
     pending = []
     for payout in pending_payouts:
@@ -354,6 +423,7 @@ def materialize(
                 historical_eligibility(disposition, batch.cutoff, snapshot_at, complete),
             )
         )
+    seeds = tuple(row for row in history if is_fraud_seed(row.disposition))
     return EvaluationInputs(
         batch,
         snapshot_at,
@@ -362,9 +432,10 @@ def materialize(
         tuple(pending),
         exclusions,
         tuple(history),
-        tuple(row for row in history if is_fraud_seed(row.disposition)),
+        seeds,
         monitoring_input(batch.payout_date, tuple(history)),
         collection_days,
+        testing_witnesses(session, batch, snapshot_at, teams, seeds),
     )
 
 

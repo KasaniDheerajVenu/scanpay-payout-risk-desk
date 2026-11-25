@@ -70,6 +70,15 @@ def read_historical_payouts(
     yield from payout_sources(session, statement)
 
 
+def read_team_names(session: Session, scope: str) -> Iterator[tuple[str, str]]:
+    statement = (
+        select(Team.team_id, Team.team_name)
+        .join(DatasetBatch, Team.first_import_batch_id == DatasetBatch.batch_id)
+        .where(DatasetBatch.scope_key == scope, DatasetBatch.status == BatchStatus.READY)
+    )
+    yield from session.execute(statement).tuples()
+
+
 def read_teams(session: Session, scope: str, ids: set[str]) -> Iterator[tuple[Team, datetime]]:
     for page in batched(sorted(ids), 1000):
         statement = (

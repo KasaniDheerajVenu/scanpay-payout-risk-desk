@@ -79,12 +79,11 @@ def reconcile(
             raise window.error("invalid_settlement_window", "covers_from")
         eligible_dates[payout.payout_id] = dates
         for other in existing[payout.team_id, payout.created_date_ist]:
-            if (
-                other.payout_id != payout.payout_id
-                and payout.covers_from <= other.covers_to
-                and other.covers_from <= payout.covers_to
-            ):
+            if other.payout_id == payout.payout_id:
+                continue
+            if payout.covers_from <= other.covers_to and other.covers_from <= payout.covers_to:
                 raise window.error("overlapping_payout_coverage", "covers_from")
+            raise window.error("duplicate_settlement_payout", "payout_id")
 
     captured = captured_by_collection_date(
         session,

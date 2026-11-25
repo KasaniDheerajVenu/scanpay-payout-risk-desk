@@ -228,6 +228,21 @@ def test_overlapping_payouts_and_conflicting_duplicate_ids_fail(context):
     assert batch_statuses(context[0]) == ["FAILED", "FAILED"]
 
 
+def test_disjoint_coverage_cannot_split_one_team_settlement(context):
+    data = fixture_data("initial")
+    key = FileType.HISTORY_PAYOUTS
+    data[key] = data[key].replace(
+        b"2025-02-08,2025-02-10,2,20.00", b"2025-02-08,2025-02-08,2,20.00"
+    )
+    data[key] += (
+        b"000203,0001,2025-02-12 17:30:00,2025-02-09,2025-02-10,0,0.00,"
+        b"AUTO_APPROVED,System,2025-02-12 18:01:00,,\n"
+    )
+    with pytest.raises(ImportFailure, match="duplicate_settlement_payout"):
+        ingest(*context, source_files(data), INITIAL)
+    assert batch_statuses(context[0]) == ["FAILED"]
+
+
 def test_optional_teams_and_history_and_assessment_counts(context):
     original = fixture_data("initial")
     with pytest.raises(ImportFailure, match="assessment_count_mismatch"):
