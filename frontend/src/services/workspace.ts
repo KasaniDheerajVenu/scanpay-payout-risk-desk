@@ -1,4 +1,5 @@
 import { ApiError, request } from "./api"
+import type { Model, RunML } from "./risk"
 
 export type Permission = "read_risk" | "view_audit" | "upload_datasets" | "run_evaluations"
   | "import_synthetic_demo" | "override_decisions" | "export_decisions"
@@ -45,9 +46,9 @@ export type Evaluation = {
     payout_count: number
     total_cents: number
     decisions: Record<"APPROVE" | "MANUAL_REVIEW" | "REJECT", { count: number; cents: number }>
-    ml: { status: string }
+    ml: Pick<RunML, "status"> & Partial<Omit<RunML, "status">>
   } | null
-  model: { model_version_id: string; status: string; algorithm: string } | null
+  model: Model | null
 }
 
 export const sessionKey = ["auth", "me"] as const
