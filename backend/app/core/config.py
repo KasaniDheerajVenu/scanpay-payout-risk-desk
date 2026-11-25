@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -37,6 +38,7 @@ class Settings(BaseSettings):
     database_max_overflow: int = Field(default=5, ge=0)
     database_timeout_seconds: int = Field(default=5, ge=1)
     app_mode: AppMode = "local"
+    demo_preset_dir: Path | None = None
     auth_signing_secret: SecretStr | None = None
     auth_session_seconds: int = Field(default=1800, ge=60, le=3600)
     auth_cookie_name: str = Field(

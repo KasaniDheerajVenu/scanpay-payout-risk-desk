@@ -1,3 +1,0 @@
-# ADR-005: Private local data, synthetic hosted demo
-
-Status: accepted. All source columns stored in typed private PostgreSQL tables, no raw CSV objects. Temporary uploads deleted; retain checksums/counts/source membership only. No actual records or derivatives to AI tools, Git or hosting without permission. Public Render/Neon demo uses independent synthetic inputs and admin-controlled built-in presets; arbitrary CSV upload disabled server-side. Separate credentials and DBs; agent has no access to private workspace, records, outputs or secrets. API/log allowlists omit sensitive fields. Authentication is not authorization to host real data.

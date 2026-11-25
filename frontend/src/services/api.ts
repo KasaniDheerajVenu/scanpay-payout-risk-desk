@@ -69,6 +69,7 @@ async function send(path: `/api/${string}`, options: Options, accept: string) {
 }
 
 const issueLabels: Record<string, string> = {
+  preset_unavailable: "The demo preset is unavailable. Ask the deployment administrator to configure it.",
   bad_header: "The CSV columns do not match the required schema.",
   invalid_header: "The CSV columns do not match the required schema.",
   duplicate_settlement_payout: "A team can have only one payout per IST settlement day.",

@@ -8,7 +8,6 @@
 
 # CSV files - allow only synthetic fixtures
 *.csv
-!/sample_data/**/*.csv
 !/backend/tests/fixtures/**/*.csv
 decisions.csv
 
