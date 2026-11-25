@@ -4,7 +4,7 @@ from typing import NamedTuple
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-FEATURE_VERSION = "payout-features-v1"
+FEATURE_VERSION = "payout-features-v2"
 ARITHMETIC = Context(prec=40)
 
 
@@ -25,6 +25,8 @@ class Feature(StrEnum):
     DISTINCT_CARD_COUNTRIES = "distinct_card_countries"
     DOMINANT_COUNTRY_SHARE = "dominant_card_country_share"
     PEAK_ATTEMPTS = "peak_attempts_per_window"
+    MEAN_BASE_CENTS = "mean_captured_base_cents"
+    CAPTURED_TIPS_CENTS = "captured_tips_cents"
 
 
 class Unit(StrEnum):
@@ -69,6 +71,8 @@ DEFINITIONS = {
     Feature.DISTINCT_CARD_COUNTRIES: Definition("Distinct issuing-country count", Unit.COUNT),
     Feature.DOMINANT_COUNTRY_SHARE: Definition("Dominant issuing-country share", Unit.RATIO),
     Feature.PEAK_ATTEMPTS: Definition("Peak attempts in the configured window", Unit.COUNT),
+    Feature.MEAN_BASE_CENTS: Definition("Average captured base amount", Unit.CENTS),
+    Feature.CAPTURED_TIPS_CENTS: Definition("Total captured tips", Unit.CENTS),
 }
 
 
@@ -107,13 +111,15 @@ def default_rules() -> tuple[FeatureRule, ...]:
             (Feature.DISTINCT_CARD_COUNTRIES, Direction.DIAGNOSTIC, "0", "0", 1),
             (Feature.DOMINANT_COUNTRY_SHARE, Direction.DIAGNOSTIC, "0", "0", 5),
             (Feature.PEAK_ATTEMPTS, Direction.HIGH, "3", ".50", 1),
+            (Feature.MEAN_BASE_CENTS, Direction.DIAGNOSTIC, "0", "0", 1),
+            (Feature.CAPTURED_TIPS_CENTS, Direction.DIAGNOSTIC, "0", "0", 1),
         )
     )
 
 
 class StatisticalPolicy(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
-    version: str = Field(default="statistics-v1", pattern=r"^[a-zA-Z0-9_.-]{1,64}$")
+    version: str = Field(default="statistics-v2", pattern=r"^[a-zA-Z0-9_.-]{1,64}$")
     iqr_multiplier: Decimal = Field(default=Decimal("1.5"), ge=0, allow_inf_nan=False)
     team_samples: int = Field(default=5, ge=2)
     profession_samples: int = Field(default=8, ge=2)

@@ -179,6 +179,19 @@ describe("persisted risk results", () => {
     expect(link.getAttribute("href")).toContain("offset=20")
   })
 
+  it("keeps the sort field when the direction changes before navigation is rendered", async () => {
+    const { seen } = server()
+    mount("/payouts?run_id=newer")
+    await screen.findByText("42 matching")
+    act(() => {
+      fireEvent.change(screen.getByLabelText("Sort by"), { target: { value: "amount" } })
+      fireEvent.change(screen.getByLabelText("Order"), { target: { value: "desc" } })
+    })
+    await waitFor(() => expect(seen.some(({ url }) =>
+      url.pathname === "/api/payouts" && url.searchParams.get("sort") === "amount" &&
+      url.searchParams.get("direction") === "desc")).toBe(true))
+  })
+
   it("renders actual investigation finding shapes, with read-only controls for viewers", async () => {
     server({ user: viewer })
     mount(payoutUrl)

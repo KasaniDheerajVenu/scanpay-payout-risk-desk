@@ -110,11 +110,18 @@ def measurements(
     base = sum(row.amount_cents for row in captured)
     tips = sum(row.tip_cents for row in captured)
     amounts = [Decimal(row.amount_cents) for row in captured]
+    largest = max(amounts, default=None)
     rules = {rule.feature: rule for rule in policy.rules}
     available = Availability.AVAILABLE
     with localcontext(ARITHMETIC):
         values = {
             Feature.PAYOUT_CENTS: Measurement(base + tips, available, captured_ids),
+            Feature.CAPTURED_TIPS_CENTS: Measurement(tips, available, captured_ids),
+            Feature.MEAN_BASE_CENTS: (
+                Measurement(Decimal(base) / len(captured), available, captured_ids)
+                if captured
+                else Measurement(None, Availability.INAPPLICABLE)
+            ),
             Feature.CAPTURED_COUNT: Measurement(len(captured), available, captured_ids),
             Feature.ATTEMPT_COUNT: Measurement(len(attempts), available, ids),
             Feature.MEDIAN_BASE_CENTS: (
@@ -123,8 +130,12 @@ def measurements(
                 else Measurement(None, Availability.INAPPLICABLE)
             ),
             Feature.MAX_BASE_CENTS: (
-                Measurement(max(amounts), available, captured_ids)
-                if amounts
+                Measurement(
+                    largest,
+                    available,
+                    attempt_ids(tuple(row for row in captured if row.amount_cents == largest)),
+                )
+                if largest is not None
                 else Measurement(None, Availability.INAPPLICABLE)
             ),
             Feature.DECLINE_RATE: ratio(

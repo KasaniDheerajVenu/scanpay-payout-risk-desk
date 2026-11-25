@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
+from starlette.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException
 
 from app.api.auth import router as auth_router
@@ -59,4 +60,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.add_exception_handler(EvaluationError, evaluation_error)
     application.middleware("http")(unexpected_errors)
     application.middleware("http")(private_api_response)
+    if settings.cors_enabled:
+        application.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(settings.trusted_origins),
+            allow_credentials=True,
+            allow_methods=["GET", "POST"],
+            allow_headers=["Content-Type", "X-CSRF-Token"],
+            expose_headers=["Retry-After"],
+        )
     return application

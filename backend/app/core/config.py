@@ -43,7 +43,8 @@ class Settings(BaseSettings):
         default="scanpay_session", pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$"
     )
     auth_cookie_secure: bool | None = None
-    auth_cookie_samesite: Literal["lax", "strict"] = "lax"
+    auth_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    cors_enabled: bool = False
     trusted_origins: tuple[str, ...] = LOCAL_TRUSTED_ORIGINS
     login_rate_limit: int = Field(default=5, ge=1)
     login_rate_window_seconds: int = Field(default=300, ge=1)
@@ -89,6 +90,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_demo_security(self) -> "Settings":
+        if self.auth_cookie_samesite == "none" and not self.secure_cookies:
+            raise ValueError("SameSite=None requires Secure cookies")
         if self.app_mode == "demo":
             if self.auth_signing_secret is None or not self.secure_cookies:
                 raise ValueError("Demo mode requires a signing secret and Secure cookies")

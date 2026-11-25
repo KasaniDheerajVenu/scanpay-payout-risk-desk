@@ -86,7 +86,13 @@ def decision_drafts(
             )
         evidence.check_findings(row, observation, fraud_finding, ml_finding)
         draft = decide(observation, fraud_finding, ml_finding)
-        evidence.check(draft.evidence, source_refs(row) | evidence.history_refs)
+        fraud_refs = {ref for lead in fraud_finding.leads for ref in lead.historical_evidence}
+        if fraud_finding.primary is not None:
+            fraud_refs.update(fraud_finding.primary.historical_evidence)
+        evidence.check(
+            draft.evidence,
+            source_refs(row) | evidence.history_refs | fraud_refs,
+        )
         drafts.append(draft)
     return tuple(drafts)
 

@@ -2,7 +2,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 
 from app.models.values import TransactionStatus
-from app.risk_engine.fraud_evidence import card_key
+from app.risk_engine.fraud_evidence import card_key, case_refs, resolve_seeds
 from app.risk_engine.hybrid_decisions import statistical_evidence
 from app.risk_engine.inputs import EvaluationInputs, HistoricalObservation, PendingObservation
 from app.schemas.evaluation import EvaluationError
@@ -63,6 +63,11 @@ class DecisionEvidence:
         self.inputs = inputs
         self.history = {row.payout.payout_id: row for row in inputs.history}
         self.seeds = {row.payout.payout_id: row for row in inputs.fraud_candidates}
+        self.reconstructed_refs = {
+            seed.payout_id: set(case_refs(seed))
+            for seed in resolve_seeds(inputs)[0]
+            if seed.witnesses
+        }
         self.history_refs = set().union(*(source_refs(row) for row in inputs.history))
         self.clusters = {item.stable_case_key: item for item in clusters}
         require(len(self.clusters) == len(clusters))
@@ -79,10 +84,11 @@ class DecisionEvidence:
             require(
                 cluster.reason_code == self.seeds[cluster.seed_payout_id].disposition.reason_code
             )
-            self.check(
-                cluster.evidence, set().union(*(source_refs(self.seeds[key]) for key in ids))
-            )
+            self.check(cluster.evidence, set().union(*(self.case_source_refs(key) for key in ids)))
             used_seeds.update(ids)
+
+    def case_source_refs(self, key: str) -> set[EvidenceRef]:
+        return source_refs(self.seeds[key]) | self.reconstructed_refs.get(key, set())
 
     @staticmethod
     def check(refs: Iterable[EvidenceRef], allowed: set[EvidenceRef]) -> None:
@@ -102,9 +108,7 @@ class DecisionEvidence:
         require(set(match.supporting_seed_ids) == {path.seed_payout_id for path in match.paths})
         require(set(match.supporting_seed_ids) <= set(cluster.case_payout_ids))
         current = source_refs(row)
-        historical = set().union(
-            *(source_refs(self.seeds[key]) for key in match.supporting_seed_ids)
-        )
+        historical = set().union(*(self.case_source_refs(key) for key in match.supporting_seed_ids))
         self.check(match.current_evidence, current)
         self.check(match.historical_evidence, historical)
         direct = False
@@ -122,7 +126,7 @@ class DecisionEvidence:
             )
             require(steps[-1].end == PathNode(kind=NodeKind.PAYOUT, source_id=path.seed_payout_id))
             require(all(a.end == b.start for a, b in zip(steps, steps[1:], strict=False)))
-            allowed = current | source_refs(seed)
+            allowed = current | self.case_source_refs(path.seed_payout_id)
             for step in steps:
                 require(step.known_at <= self.inputs.batch.cutoff)
                 require(step.available_at <= self.inputs.snapshot_at)
@@ -199,7 +203,7 @@ class DecisionEvidence:
         for lead in fraud.leads:
             require(lead.seed_payout_id in self.seeds)
             self.check(lead.current_evidence, current)
-            self.check(lead.historical_evidence, source_refs(self.seeds[lead.seed_payout_id]))
+            self.check(lead.historical_evidence, self.case_source_refs(lead.seed_payout_id))
         require(
             (fraud.status != Exposure.UNRESOLVED)
             or any(lead.strength == Strength.UNRESOLVED for lead in fraud.leads)

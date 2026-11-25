@@ -60,12 +60,53 @@ def exported(client, run_id, **params):
     return list(reader)
 
 
-def upload_fraud_fixture(client, tmp_path):
+def upload_fraud_fixture(client, tmp_path, *, reconstruct=None):
     paths = {}
     for kind in FileType:
         data = (FIXTURES / "initial" / f"{kind}.csv").read_bytes()
         if kind == FileType.HISTORY_PAYOUTS:
             data = data.replace(b"Fabricated fixture case.", b"implicated transaction: 000102")
+            if reconstruct == "ring":
+                data = (
+                    data.replace(b",2,20.00,", b",3,21.00,")
+                    .replace(b",1,28.00,", b",2,29.00,")
+                    .replace(
+                        b"implicated transaction: 000102",
+                        b"The same 2 cards paid Imaginary Plumbing Workshop 1 and "
+                        b"Imaginary Locksmith Workshop 2.",
+                    )
+                )
+            elif reconstruct == "testing":
+                data = (
+                    data.replace(b",2,20.00,", b",2,6.01,")
+                    .replace(b",1,28.00,", b",1,900.00,")
+                    .replace(
+                        b"FRAUD_CARD_RING,implicated transaction: 000102",
+                        b"FRAUD_CARD_TESTING,1 foreign card ran $2-4 test charges at Imaginary "
+                        b"Plumbing Workshop 1 and Fictional Repair Studio "
+                        b"around 11:06 AM IST then was charged $800+ here.",
+                    )
+                )
+        if kind == FileType.HISTORY_TRANSACTIONS and reconstruct == "ring":
+            data = data.replace(b"DEMO-CARD-000101", b"FIXTURE-CARD").rstrip() + (
+                b"\n000110,0001,2025-02-10 14:21,1.00,0,card,SYNTH-SECOND,US,captured,Test,00420\n"
+                b"000111,0002,2025-02-10 11:21,1.00,0,card,SYNTH-SECOND,US,captured,Test,00420\n"
+            )
+        if kind == FileType.HISTORY_TRANSACTIONS and reconstruct == "testing":
+            data = (
+                data.replace(b"14:20:00,16.99", b"11:05:00,3.00")
+                .replace(b"DEMO-CARD-000101", b"FIXTURE-CARD")
+                .replace(b",28.00,", b",900.00,")
+                .replace(b"FIXTURE-CARD,US", b"FIXTURE-CARD,CA")
+                .rstrip()
+                + b"\n000110,0008,2025-02-10 11:06,3.00,0,card,"
+                b"FIXTURE-CARD,CA,declined,Test,00420\n"
+            )
+        if kind == FileType.TEAMS and reconstruct == "testing":
+            data = data.rstrip() + (
+                b"\n0008,Fictional Repair Studio,Plumbing,Fictional Owner,0005550008,"
+                b"8 Synthetic Lane,Example Harbor,MA,2024-06-01,active,,000000019,0008,\n"
+            )
         if kind == FileType.LATEST_TRANSACTIONS:
             data = data.replace(b"DEMO-CARD-000301", b"FIXTURE-CARD")
         paths[kind] = tmp_path / f"{kind}.csv"
@@ -81,11 +122,33 @@ def upload_fraud_fixture(client, tmp_path):
             data={"mode": "INITIAL", "cutoff": INITIAL_CUTOFF},
             files=files,
         )
-    assert response.status_code == 201
+    assert response.status_code == 201, response.text
     for path in paths.values():
         path.unlink()
     assert not list(tmp_path.iterdir())
     return response.json()["batch_id"]
+
+
+@pytest.mark.parametrize("scenario", ["ring", "testing"])
+def test_natural_language_case_published_with_cross_team_witness(evaluation_db, tmp_path, scenario):
+    _, settings, admin, _ = evaluation_db
+    with ExitStack() as stack:
+        operator = signed_in(stack, settings, admin.username)
+        batch_id = upload_fraud_fixture(operator, tmp_path, reconstruct=scenario)
+        response = start(operator, batch_id)
+        assert response.status_code == 201, response.json()
+        run_id = response.json()["run_id"]
+        detail = read(operator, "/api/payouts/000401", run_id).json()
+        assert detail["payout"]["effective_decision"] == "REJECT"
+        rows = {row["payout_id"]: row for row in exported(operator, run_id)}
+        assert rows["000401"]["decision"] == "Reject"
+        references = set(rows["000401"]["evidence"].split(";"))
+        assert {"000101", "000102", "000301"} <= references
+        if scenario == "testing":
+            assert "000110" in references
+        assert rows["000402"]["decision"] != "Reject"
+        replay = start(operator, batch_id)
+        assert replay.status_code == 200 and replay.json()["run_id"] == run_id
 
 
 def test_synthetic_workflow_override_updates_investigation_queue_dashboard_and_csv(
@@ -101,7 +164,7 @@ def test_synthetic_workflow_override_updates_investigation_queue_dashboard_and_c
         assert start(operator, batch_id, config_version="unknown").status_code == 422
         assert start(reviewer, batch_id).status_code == 403
         assert operator.post("/api/evaluations", json={"batch_id": batch_id}).status_code == 403
-        response = start(operator, batch_id, config_version="hybrid-v1")
+        response = start(operator, batch_id, config_version="hybrid-v2")
         assert response.status_code == 201, response.json()
         run = response.json()
         run_id = run["run_id"]

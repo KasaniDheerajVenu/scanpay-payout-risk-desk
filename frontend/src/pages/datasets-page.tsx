@@ -65,10 +65,10 @@ export function DatasetsPage() {
   const client = useQueryClient()
   const [params, setParams] = useSearchParams()
   const batchId = params.get("batch_id")
-  const [importOpen, setImportOpen] = useState(false)
-  const [imported, setImported] = useState<{ batch: BatchDetail; reused: boolean }>()
   const canUpload = user.mode === "local" && hasPermission(user, "upload_datasets")
   const canDemoImport = user.mode === "demo" && hasPermission(user, "import_synthetic_demo")
+  const [importOpen, setImportOpen] = useState(canUpload && !batchId)
+  const [imported, setImported] = useState<{ batch: BatchDetail; reused: boolean }>()
   const list = useQuery({ queryKey: [...prefix, ...batchKey, "list"], queryFn: ({ signal }) => getBatches(signal), retry: false })
   const detail = useQuery({ queryKey: [...prefix, ...batchKey, "detail", batchId],
     queryFn: ({ signal }) => getBatch(batchId!, signal), enabled: !!batchId, retry: false })
@@ -98,8 +98,13 @@ export function DatasetsPage() {
       <PageHeader title="Datasets" description="Manage dataset imports and inspect batch readiness."
         action={(canUpload || canDemoImport) && <Button onClick={() => setImportOpen(!importOpen)} aria-expanded={importOpen}>
           {importOpen ? <X className="size-4" aria-hidden="true" /> : <Plus className="size-4" aria-hidden="true" />}
-          {importOpen ? "Close import form" : canDemoImport ? "Import synthetic preset" : "Import dataset"}
+          {importOpen ? "Close import form" : canDemoImport ? "Import synthetic preset" : "Initial or incremental import"}
         </Button>} />
+      {!canUpload && !canDemoImport && <Notice kind="info" title="Dataset access is read-only">
+        {user.mode === "demo"
+          ? "A demo administrator can import a synthetic preset."
+          : "A local administrator can run initial and incremental CSV imports."}
+      </Notice>}
       {importOpen && canUpload && <UploadPanel onImported={onImported} onFailed={refreshHistory} />}
       {importOpen && canDemoImport && <DemoImportPanel onImported={onImported} onFailed={refreshHistory} />}
       {imported && <Notice kind="success" title={imported.reused ? "Existing batch reused" : "Dataset imported"}>

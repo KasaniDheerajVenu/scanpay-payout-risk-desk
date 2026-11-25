@@ -42,6 +42,7 @@ The project uses a monorepo with a React/TypeScript frontend and a modular FastA
 | [Database design](docs/database-design.md) | Tables, constraints and relationships |
 | [API design](docs/api-design.md) | Endpoints, contracts and access control |
 | [Testing strategy](docs/testing-strategy.md) | Business and integration test plan |
+| [Acceptance verification](docs/acceptance-verification.md) | Integrated setup, CSV import and synthetic verification |
 | [Architecture decisions](docs/decisions/README.md) | Technical choices and trade-offs |
 
 ## Data privacy
