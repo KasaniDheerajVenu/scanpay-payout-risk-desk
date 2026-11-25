@@ -100,6 +100,14 @@ Out of scope: real payment processing, bank transfers, settlement scheduling, st
 
 Additional acceptance: remove input files after a successful synthetic import, then train/score/export from PostgreSQL. A second batch must learn from eligible prior verified dispositions; pending/override-only records cannot enter training. Exact duplicate imports do not duplicate source rows. Conflicting imports roll back. Previous runs and all overrides remain intact. No file content in DB or logs. Model effectiveness must be measured, not promised. Use PostgreSQL locally and Neon hosted.
 
+## Phase 12 frontend verification
+
+| Requirements | Implementation | Verification |
+| --- | --- | --- |
+| FR-21 and FR-24 | [Session and permissions](../frontend/src/features/auth/session.tsx), [typed same-origin client](../frontend/src/services/api.ts), and [explicit run selection](../frontend/src/features/evaluations/selection.ts) | Component coverage for login, session restoration and expiration, cookie-bound CSRF, role actions and scoped cache cleanup. |
+| FR-26, FR-27, FR-28 and FR-30 | [Dataset workflow](../frontend/src/pages/datasets-page.tsx), [CSV and synthetic preset forms](../frontend/src/features/datasets/import-panel.tsx), and [evaluation workflow](../frontend/src/pages/evaluations-page.tsx) | [Component tests](../frontend/tests/workflows.test.tsx) cover upload validation, server errors, import replay, protected evaluation, and explicit selection of completed runs. |
+| Responsive workspace | [Workspace layout](../frontend/src/layouts/app-layout.tsx) and [theme](../frontend/src/index.css) | Synthetic browser verification uses the Phase 11 backend and checks 360, 768, 1024 and 1440 CSS px. |
+
 ## Phase 3 traceability
 
 | ID | Implemented functionality | Implementation and tests | Status |
