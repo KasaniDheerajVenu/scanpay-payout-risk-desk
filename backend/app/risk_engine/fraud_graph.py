@@ -154,7 +154,7 @@ def build_graph(inputs: EvaluationInputs, seeds: tuple[Seed, ...]) -> nx.MultiGr
                 Relationship.CASE_TRANSACTION,
                 stamp,
             )
-            if (card := card_key(attempt)) is not None:
+            if seed.implicates_payer_cards and (card := card_key(attempt)) is not None:
                 # Keep the earliest availability when the same case explicitly names several uses.
                 card_node = Node(NodeKind.CARD, card)
                 edge = graph.get_edge_data(case, card_node, Relationship.IMPLICATED_CARD)

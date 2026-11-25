@@ -380,6 +380,18 @@ def test_takeover_victim_missing_cards_and_incidental_activity_do_not_propagate(
         Relationship.PRIOR_TEAM_CASE,
         Relationship.INCIDENTAL_CARD,
     }
+    same_payer = pending("action", "owner-b", tx("payer", "owner-b", "implicated-card"))
+    history = historical(
+        raw(
+            "prior",
+            team="owner-b",
+            weeks=2,
+            attempts=(tx("prior-payer", "owner-b", "implicated-card", 2),),
+        )
+    )
+    takeover = analyze_fraud(inputs((case, history), same_payer, team("owner-a"), team("owner-b")))
+    assert not takeover.pending[0].established_exposure
+    assert not takeover.contamination
     ring = seed("source", "owner-a", "implicated-card", evidence=case.disposition.reason)
     victim = historical(
         raw(
@@ -414,6 +426,39 @@ def test_takeover_victim_missing_cards_and_incidental_activity_do_not_propagate(
     ]
     assert Node(NodeKind.CARD, "") not in graph
     assert analyze_fraud(missing).pending[0].status == Exposure.INSUFFICIENT
+
+
+@pytest.mark.parametrize("corroborated", [False, True])
+def test_partial_bank_match_requires_corroboration_and_never_establishes_exposure(corroborated):
+    case = seed(
+        "source",
+        "owner-a",
+        "historic-card",
+        reason=ATO,
+        evidence=(
+            "implicated transaction: source-tx\n"
+            f"implicated bank routing and last4: {BANK}:0001\n"
+            f"implicated signup device: {DEVICE}"
+        ),
+    )
+    current = pending("action", "owner-b", tx("current", "owner-b", "different-card"))
+    finding = analyze_fraud(
+        inputs(
+            (case,),
+            current,
+            team("owner-a", device=DEVICE, routing=BANK, last4="0001"),
+            team(
+                "owner-b",
+                device=DEVICE if corroborated else "unrelated",
+                routing=BANK,
+                last4="0001",
+            ),
+        )
+    ).pending[0]
+    assert finding.status == (Exposure.UNRESOLVED if corroborated else Exposure.WEAK)
+    assert not finding.established_exposure and finding.primary is None
+    if corroborated:
+        assert finding.leads[0].relationship == Relationship.UNRESOLVED_DESTINATION
 
 
 def test_multiple_clusters_rank_by_strength_then_key():

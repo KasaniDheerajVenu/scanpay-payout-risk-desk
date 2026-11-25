@@ -335,6 +335,8 @@ def verify(api, history: Path, action: Path, run_id: str, exported: Path):
                 f"  Verify {lead['relationship']} against historical payout "
                 f"{lead['seed_payout_id']} before inferring exposure."
             )
+        for ref in fraud.get("coordinated_review_evidence", ()):
+            print(f"  Coordinated sequence witness: {ref['type']}:{ref['id']}")
         category = {"MANUAL_REVIEW": "open_manual_review", "REJECT": "rejected"}.get(decision)
         if category is None:
             category = (

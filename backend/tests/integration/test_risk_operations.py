@@ -66,7 +66,15 @@ def upload_fraud_fixture(client, tmp_path, *, reconstruct=None):
         data = (FIXTURES / "initial" / f"{kind}.csv").read_bytes()
         if kind == FileType.HISTORY_PAYOUTS:
             data = data.replace(b"Fabricated fixture case.", b"implicated transaction: 000102")
-            if reconstruct == "ring":
+            if reconstruct == "takeover":
+                data = data.replace(
+                    b"FRAUD_CARD_RING,implicated transaction: 000102",
+                    b'FRAUD_ACCOUNT_TAKEOVER,"Reviewed unauthorized destination.\n'
+                    b"implicated transaction: 000102\n"
+                    b"implicated bank routing and last4: 000000019:0001\n"
+                    b'implicated signup device: FAKE-DEVICE-1"',
+                )
+            if reconstruct in {"ring", "duplicate-ring"}:
                 data = (
                     data.replace(b",2,20.00,", b",3,21.00,")
                     .replace(b",1,28.00,", b",2,29.00,")
@@ -76,6 +84,18 @@ def upload_fraud_fixture(client, tmp_path, *, reconstruct=None):
                         b"Imaginary Locksmith Workshop 2.",
                     )
                 )
+                if reconstruct == "duplicate-ring":
+                    data = (
+                        data.replace(b"\r\n", b"\n")
+                        .replace(
+                            b",MANUAL_APPROVED,Fixture Analyst,", b",REJECTED,Fixture Analyst,"
+                        )
+                        .replace(
+                            b'OUTLIER_VERIFIED,"Fictional invoice, verified.\nSecond line."',
+                            b"FRAUD_CARD_RING,The same 2 cards paid Imaginary Plumbing Workshop 1 "
+                            b"and Imaginary Locksmith Workshop 2.",
+                        )
+                    )
             elif reconstruct == "testing":
                 data = (
                     data.replace(b",2,20.00,", b",2,6.01,")
@@ -87,7 +107,7 @@ def upload_fraud_fixture(client, tmp_path, *, reconstruct=None):
                         b"around 11:06 AM IST then was charged $800+ here.",
                     )
                 )
-        if kind == FileType.HISTORY_TRANSACTIONS and reconstruct == "ring":
+        if kind == FileType.HISTORY_TRANSACTIONS and reconstruct in {"ring", "duplicate-ring"}:
             data = data.replace(b"DEMO-CARD-000101", b"FIXTURE-CARD").rstrip() + (
                 b"\n000110,0001,2025-02-10 14:21,1.00,0,card,SYNTH-SECOND,US,captured,Test,00420\n"
                 b"000111,0002,2025-02-10 11:21,1.00,0,card,SYNTH-SECOND,US,captured,Test,00420\n"
@@ -107,7 +127,9 @@ def upload_fraud_fixture(client, tmp_path, *, reconstruct=None):
                 b"\n0008,Fictional Repair Studio,Plumbing,Fictional Owner,0005550008,"
                 b"8 Synthetic Lane,Example Harbor,MA,2024-06-01,active,,000000019,0008,\n"
             )
-        if kind == FileType.LATEST_TRANSACTIONS:
+        if kind == FileType.TEAMS and reconstruct == "takeover":
+            data = data.replace(b"000000019,0002,", b"000000019,0001,FAKE-DEVICE-1")
+        if kind == FileType.LATEST_TRANSACTIONS and reconstruct != "takeover":
             data = data.replace(b"DEMO-CARD-000301", b"FIXTURE-CARD")
         paths[kind] = tmp_path / f"{kind}.csv"
         paths[kind].write_bytes(data)
@@ -129,7 +151,7 @@ def upload_fraud_fixture(client, tmp_path, *, reconstruct=None):
     return response.json()["batch_id"]
 
 
-@pytest.mark.parametrize("scenario", ["ring", "testing"])
+@pytest.mark.parametrize("scenario", ["ring", "duplicate-ring", "testing"])
 def test_natural_language_case_published_with_cross_team_witness(evaluation_db, tmp_path, scenario):
     _, settings, admin, _ = evaluation_db
     with ExitStack() as stack:
@@ -146,9 +168,32 @@ def test_natural_language_case_published_with_cross_team_witness(evaluation_db, 
         assert {"000101", "000102", "000301"} <= references
         if scenario == "testing":
             assert "000110" in references
+        if scenario == "duplicate-ring":
+            clusters = read(operator, "/api/fraud-clusters", run_id).json()
+            assert len(clusters) == 1
+            assert {ref["id"] for ref in clusters[0]["evidence"] if ref["type"] == "payout"} == {
+                "000201",
+                "000202",
+            }
         assert rows["000402"]["decision"] != "Reject"
         replay = start(operator, batch_id)
         assert replay.status_code == 200 and replay.json()["run_id"] == run_id
+
+
+def test_corroborated_partial_destination_reviews_without_a_reject(evaluation_db, tmp_path):
+    _, settings, admin, _ = evaluation_db
+    with ExitStack() as stack:
+        client = signed_in(stack, settings, admin.username)
+        batch = upload_fraud_fixture(client, tmp_path, reconstruct="takeover")
+        response = start(client, batch)
+        assert response.status_code == 201, response.text
+        run_id = response.json()["run_id"]
+        payout = read(client, "/api/payouts/000401", run_id).json()
+        assert not payout["fraud"]["established_exposure"]
+        rows = {row["payout_id"]: row for row in exported(client, run_id)}
+        result = rows["000401"]
+        assert result["decision"] == "Manual review" and result["fraud_cluster"] == ""
+        assert "confirm the current payout destination" in result["reasons"]
 
 
 def test_synthetic_workflow_override_updates_investigation_queue_dashboard_and_csv(
@@ -164,7 +209,7 @@ def test_synthetic_workflow_override_updates_investigation_queue_dashboard_and_c
         assert start(operator, batch_id, config_version="unknown").status_code == 422
         assert start(reviewer, batch_id).status_code == 403
         assert operator.post("/api/evaluations", json={"batch_id": batch_id}).status_code == 403
-        response = start(operator, batch_id, config_version="hybrid-v2")
+        response = start(operator, batch_id, config_version="hybrid-v3")
         assert response.status_code == 201, response.json()
         run = response.json()
         run_id = run["run_id"]

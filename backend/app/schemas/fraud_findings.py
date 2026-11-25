@@ -46,6 +46,7 @@ class Relationship(StrEnum):
     NONPAYABLE_CARD = "nonpayable_implicated_card_attempt"
     INCIDENTAL_CARD = "incidental_card_observation"
     WEAK_PROFILE = "weak_profile_match"
+    UNRESOLVED_DESTINATION = "unresolved_destination_match"
     PRIOR_TEAM_CASE = "prior_team_case"
     UNRESOLVED_CASE = "unresolved_case"
 
@@ -132,6 +133,7 @@ class FraudFinding(SafeModel):
     primary: ClusterMatch | None = None
     alternatives: tuple[ClusterMatch, ...] = ()
     leads: tuple[InvestigativeLead, ...] = ()
+    coordinated_review_evidence: tuple[EvidenceRef, ...] = ()
     explanation: str
     policy_version: str
     mapping_version: str | None = None

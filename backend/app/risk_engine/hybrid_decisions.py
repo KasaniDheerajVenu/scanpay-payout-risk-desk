@@ -3,12 +3,19 @@ from dataclasses import dataclass
 from app.models.values import Decision, MLStatus
 from app.risk_engine.feature_schema import DEFINITIONS, Feature
 from app.risk_engine.statistical_anomalies import format_value
-from app.schemas.fraud_findings import EvidenceRef, EvidenceType, Exposure, FraudFinding, Strength
+from app.schemas.fraud_findings import (
+    EvidenceRef,
+    EvidenceType,
+    Exposure,
+    FraudFinding,
+    Relationship,
+    Strength,
+)
 from app.schemas.ml_findings import MLFinding
 from app.schemas.risk_findings import ComparisonStatus, StatisticalFinding
 from app.services.statistical_analysis_service import ObservationAnalysis
 
-RULE_VERSION = "hybrid-v2"
+RULE_VERSION = "hybrid-v3"
 REQUIRED_NORMAL_CONTEXT = (Feature.PAYOUT_CENTS, Feature.CAPTURED_COUNT)
 
 
@@ -112,12 +119,26 @@ def decide(stats: ObservationAnalysis, fraud: FraudFinding, ml: MLFinding) -> De
         decision = Decision.MANUAL_REVIEW
         if fraud.status == Exposure.UNRESOLVED:
             reason = "Investigate the cited payment attempts and unresolved historical fraud links."
+            if any(
+                lead.relationship == Relationship.UNRESOLVED_DESTINATION for lead in fraud.leads
+            ):
+                reason = (
+                    "The team shares a partial bank identifier and a corroborating profile "
+                    "identifier with a known takeover case. Independently confirm the current "
+                    "payout destination before release."
+                )
             context = tuple(
                 ref
                 for lead in fraud.leads
                 if lead.strength == Strength.UNRESOLVED
                 for ref in (*lead.current_evidence, *lead.historical_evidence)
             )
+        elif fraud.coordinated_review_evidence:
+            reason = (
+                "Multiple cards had small unsuccessful or refunded attempts at another team "
+                "shortly before much larger captured payments here. Verify the cited sequence."
+            )
+            context = fraud.coordinated_review_evidence
         elif anomaly is not None:
             reason, context = payment_anomaly_reason(anomaly, stats)
         elif ml_review:

@@ -255,7 +255,7 @@ Named card-testing witnesses can come from teams without a historical payout. Th
 | --- | --- |
 | A, B, C, D, S, T | Expected one routine Approve and three reviews for the exceptional ACH, individual job and volume spike. Actual API and CSV matched. The three approved reason codes were present in the fixture and excluded from the five routine observations per baseline. Dashboard reconciled 120,000 cents. |
 | E, F, H, I, J, L, O, X | Existing graph tests cover strong cluster merge, weak devices, nonpayable attempts, victim guards and ambiguity. CSV/API regressions exercise ring and testing Reject, unrelated non-Reject and idempotent replay. Full duplicate-prose and victim scenario permutations remain unverified end to end. |
-| G, K | Similarity alone must never establish known fraud. Existing material statistical and validated model flags can review. No dedicated coordinated or unrelated-card sequence rule was completed. |
+| G, K | Similarity alone must never establish known fraud. See the `hybrid-v3` addendum for the new review rule and its narrower acceptance scope. |
 | M, N | Victim history does not establish exposure. The routine fixture includes historical victim context and approves normal current activity. An independently specified new victim sequence has no end-to-end verdict. |
 | P, Q, R | Historical takeover is recognized as a fraud category and remediated/prior-team links cannot independently establish exposure. A true current destination match cannot be certified with the available columns. Dedicated partial-destination and remediated-victim end-to-end scenarios remain unverified. |
 | U, V, W | Unit coverage verifies actionable ACTIVE model review and fraud precedence. A genuine ML-only pending decision through this complete synthetic pipeline and an independent ordinary high-value foreign-card case remain unverified. |
@@ -264,3 +264,15 @@ Named card-testing witnesses can come from teams without a historical payout. Th
 Restart the backend with its existing local PostgreSQL and signing settings, then select the same READY batch under **Evaluations** and select **Run evaluation**. Open the newly completed `hybrid-v2` run explicitly. Keep the original run selected if you need to inspect its analyst overrides. The existing batch does not need to be uploaded again.
 
 Regression results: 244 backend tests passed, including live PostgreSQL and Alembic consistency. After adding the final clock/country and ambiguity checks, the focused unit/API run passed 36 tests, the additional parser run passed five tests, and the final CSV/API subset passed three tests. The complete suite was not rerun after those final parser changes. Frontend lint, all 27 frontend tests, TypeScript and the production build passed using Vite's runner config loader for tests and build.
+
+### Hybrid v3 coordinated payment review
+
+The new rule considers only accepted transaction attempts for the selected pending payouts. It requires at least two distinct cards each to have an earlier declined or refunded payment at the same peer team, followed within 30 minutes by a captured payment at least 20 times larger. These conservative defaults are review thresholds independent of specific historical incident amounts, times and counts. They are not fitted to the pending data. The finding stores only team and transaction references. The publisher independently derives the sequence evidence from the frozen inputs before accepting it. No graph edge or known fraud cluster is created for this signal.
+
+G and K acceptance fixtures isolate this rule with normal team statistics and no actionable model signal. A single matching card left the routine payout at Approve. Two qualifying unrelated cards produced Manual review with both teams' transaction evidence and a blank fraud cluster. General captured-only coordinated behavior, transaction-level victim cleanup for model holdout, and the remaining A–Z gaps above still require verification.
+
+E passed through imported prose: two historical rejections describing the same card ring merged into one cluster with both rejected payout IDs. Its captured match still exported as Reject.
+
+Q passed with corroborated but incomplete destination evidence. A cross-team match on routing and last four digits, plus an independently implicated signup device, produced Manual review with a destination verification reason and a blank cluster. The unit control kept the bank-only match weak. Takeover anchors cannot incriminate a payer card or remove unrelated approved activity from model fitting. The source schema continues to lack a way to confirm a current payout destination for scenario P.
+
+Reevaluate the existing Ready batch and select the completed `hybrid-v3` run. The rule and fraud-policy versions participate in the fingerprint, so old decisions and analyst overrides remain on their original run.
