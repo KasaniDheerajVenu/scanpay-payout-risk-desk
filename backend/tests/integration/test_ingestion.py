@@ -547,6 +547,7 @@ def demo_settings(settings: Settings) -> Settings:
         database_url=settings.database_url,
         auth_signing_secret=settings.auth_signing_secret,
         app_mode="demo",
+        demo_preset_dir=FIXTURES / "demo_history",
         trusted_origins=(DEMO_ORIGIN,),
     )
 

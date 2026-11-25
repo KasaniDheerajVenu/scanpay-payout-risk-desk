@@ -39,7 +39,7 @@ from app.services.evaluation_service import claim_run, fail_run, prepare_run
 from app.services.ingestion_service import ingest
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
-SAMPLE = Path(__file__).resolve().parents[3] / "sample_data" / "synthetic-v1"
+SAMPLE = FIXTURES / "demo_history"
 ORIGIN = "http://127.0.0.1:5173"
 PASSWORD = "fabricated evaluation test password"
 INITIAL_CUTOFF = "2025-02-20 10:00"

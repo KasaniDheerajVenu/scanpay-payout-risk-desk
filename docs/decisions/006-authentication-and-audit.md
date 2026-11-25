@@ -1,3 +1,0 @@
-# ADR-006: Authenticated identity and append-only decisions
-
-Status: accepted project enhancement; original brief does not mandate auth. Use users table, Argon2id and short-lived signed HttpOnly cookie, server-side role and active checks, CSRF/origin checks. Admin imports/evaluates, analyst/admin overrides/exports, viewer reads. Actor from session. Local shared scope; demo reviewer-specific overrides. Immutable automated version 1 per run and append-only human versions; derive CURRENT/SUPERSEDED and AUTOMATED/HUMAN, do not update prior decision rows. Record reason, evidence, cluster and timestamp. Re-evaluation produces new run and preserves old history.
