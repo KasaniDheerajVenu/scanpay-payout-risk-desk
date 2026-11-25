@@ -26,7 +26,20 @@ export async function request<T>(path: `/api/${string}`, options: Options = {}):
   data: T
   status: number
 }> {
-  const headers = new Headers({ Accept: "application/json" })
+  const response = await send(path, options, "application/json")
+  return { data: (response.status === 204 ? undefined : await response.json()) as T, status: response.status }
+}
+
+export async function requestCsv(path: `/api/${string}`) {
+  const response = await send(path, {}, "text/csv")
+  if (response.headers.get("Content-Type")?.split(";")[0].trim().toLowerCase() !== "text/csv") {
+    throw new ApiError(502, {})
+  }
+  return response.blob()
+}
+
+async function send(path: `/api/${string}`, options: Options, accept: string) {
+  const headers = new Headers({ Accept: accept })
   const epoch = sessionEpoch
   const { signal, body, write, anonymous } = options
   if (write) {
@@ -50,7 +63,7 @@ export async function request<T>(path: `/api/${string}`, options: Options = {}):
       ...payload?.error?.details, code: payload?.error?.details?.code ?? payload?.error?.code,
     }, response.headers.get("Retry-After"))
   }
-  return { data: (response.status === 204 ? undefined : await response.json()) as T, status: response.status }
+  return response
 }
 
 const issueLabels: Record<string, string> = {
@@ -67,6 +80,11 @@ const issueLabels: Record<string, string> = {
   processing_failed: "The evaluation could not be processed.",
   publication_failed: "The evaluation results could not be published.",
   attempt_expired: "The previous execution expired. Run the evaluation again.",
+  unchanged_decision: "Choose a different decision.",
+  invalid_override_evidence: "Choose supporting records from this payout’s published evidence.",
+  review_evidence_required: "Manual review requires a related historical payout or transaction.",
+  invalid_override_cluster: "Choose a fraud cluster from this evaluation.",
+  override_exposure_not_established: "Reject requires the complete evidence for a published exposure path.",
 }
 
 export function issueMessage(code?: string | null) {

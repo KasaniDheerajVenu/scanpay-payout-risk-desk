@@ -21,6 +21,10 @@
   --warning: #825000;
   --destructive: #a12b34;
   --error-surface: #fcecef;
+  --decision-auto: #13735a;
+  --decision-analyst: #2057a7;
+  --decision-review: #9b6309;
+  --decision-reject: #a12b34;
   --radius: 0.625rem;
   --shadow-panel: 0 2px 4px rgb(15 38 65 / 0.06);
 }
@@ -165,6 +169,60 @@
   .password-field { @apply relative; }
   .password-field input { @apply pr-11; }
   .password-field button { @apply absolute right-1 top-1 text-muted-foreground; }
+  .risk-context { @apply flex min-w-0 flex-wrap items-start justify-between gap-4 rounded-panel border border-border bg-card p-4 sm:p-5; }
+  .risk-context dl { @apply flex min-w-0 flex-wrap gap-x-5 gap-y-3; }
+  .risk-context dl > div { @apply min-w-0; }
+  .risk-tiles { @apply grid min-w-0 grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-5; }
+  .risk-tile { @apply grid min-w-0 content-start gap-1 px-3 py-3.5 sm:px-4; }
+  .risk-tile:first-child { @apply col-span-2 border-primary/35 lg:col-span-1; }
+  .risk-tile > div { @apply flex items-center gap-1.5 text-xs leading-snug font-semibold; }
+  .risk-tile strong, .risk-amount { @apply break-words text-xl leading-tight font-bold tabular-nums sm:text-2xl; }
+  .risk-tile small { @apply text-xs text-muted-foreground; }
+  .metric-dot { @apply size-2 shrink-0 rounded-full; }
+  .risk-charts { @apply grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,.85fr)_minmax(0,1.15fr)]; }
+  .chart-frame { @apply h-60 min-w-0; }
+  .risk-nested { @apply min-w-0 rounded-lg border border-border bg-background/65 p-3; }
+  .risk-disclosure { @apply min-w-0 rounded-lg border border-border p-3; }
+  .risk-disclosure summary { @apply cursor-pointer text-sm font-semibold; }
+  .risk-disclosure summary span { @apply break-words; }
+  .risk-disclosure summary small { @apply ml-2 text-xs font-normal text-muted-foreground; }
+  .table-scroll { @apply w-full max-w-full overflow-x-auto rounded-lg border border-border; }
+  .risk-table { @apply w-full border-collapse text-left text-sm; }
+  .risk-table :is(th, td) { @apply border-b border-border px-3 py-2.5 align-top; }
+  .risk-table thead th { @apply bg-muted/55 text-xs whitespace-nowrap; }
+  .risk-table tbody tr:last-child > * { @apply border-b-0; }
+  .risk-table tbody tr:hover { @apply bg-background; }
+  .risk-table small { @apply mt-1 text-xs leading-snug text-muted-foreground; }
+  .payout-table { min-width: 73rem; }
+  .attempt-table { min-width: 40rem; }
+  .queue-controls { @apply grid min-w-0 grid-cols-2 items-end gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,.75fr)]; }
+  .queue-search { @apply col-span-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2 lg:col-span-1; }
+  .evidence-list { @apply flex min-w-0 flex-wrap gap-1.5; }
+  .evidence-list li { @apply inline-flex max-w-full min-w-0 flex-wrap items-center gap-1.5 rounded border border-border bg-card px-2 py-1 text-xs; }
+  .evidence-list li > span { @apply text-muted-foreground capitalize; }
+  .evidence-list code, .path-edge code { @apply min-w-0 break-all; }
+  .section-links { @apply flex flex-wrap gap-x-4 gap-y-2 rounded-lg border border-border bg-card px-4 py-3 text-sm; }
+  .section-links a { @apply font-semibold text-primary hover:underline; }
+  .quartile-range { @apply relative mx-2 mb-5 h-2 rounded bg-muted; }
+  .quartile-band { @apply absolute top-0 h-2 rounded bg-blue-200; }
+  .quartile-median { @apply absolute top-[-3px] h-3.5 w-0.5 -translate-x-1/2 rounded bg-blue-700; }
+  .quartile-observed { @apply absolute top-[-2px] size-3 -translate-x-1/2 rounded-full border-2 border-card bg-foreground; }
+  .path-steps, .audit-timeline { @apply mt-3 grid gap-0 border-l-2 border-border pl-3 sm:pl-4; }
+  .path-steps li, .audit-timeline li { @apply relative grid min-w-0 gap-2 border-b border-border py-3 last:border-b-0; }
+  .path-steps li::before, .audit-timeline li::before { content: ""; @apply absolute top-4 -left-[1.05rem] size-2 rounded-full bg-primary sm:-left-[1.3rem]; }
+  .path-edge { @apply flex min-w-0 flex-wrap items-center gap-2 text-xs; }
+  .path-edge code { @apply rounded bg-muted px-2 py-1; }
+  .fraud-card { scroll-margin-top: 1rem; }
+  .fraud-card:target { @apply border-primary/70; }
+  .override-dialog { @apply m-auto w-[calc(100%-2rem)] max-w-xl overflow-auto rounded-panel border border-border bg-card text-foreground shadow-xl; max-height: min(90svh, 52rem); }
+  .override-dialog::backdrop { background: rgb(16 36 65 / 52%); }
+  .dialog-inner { @apply grid min-w-0 gap-4 p-4 sm:p-6; }
+  .dialog-actions { @apply flex flex-wrap justify-end gap-2; }
+  .risk-textarea { @apply w-full min-w-0 resize-y rounded-md border border-input bg-card px-3 py-2 text-sm font-normal text-foreground; }
+  .evidence-picker { @apply mt-2 grid max-h-40 gap-1 overflow-y-auto rounded-md border border-border p-2; }
+  .evidence-picker label { @apply flex min-w-0 items-start gap-2 rounded px-1.5 py-1 text-sm hover:bg-background; }
+  .evidence-picker input { @apply mt-1 shrink-0 accent-primary; }
+  .evidence-picker code { @apply break-all; }
 
   @media (min-width: 64rem) {
     .workspace { display: grid; grid-template-columns: 14rem minmax(0, 1fr); }

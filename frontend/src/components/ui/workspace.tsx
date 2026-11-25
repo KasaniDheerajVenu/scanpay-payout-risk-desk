@@ -17,9 +17,10 @@ export function PageHeader({ title, description, action }: {
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const tone = ["READY", "COMPLETED", "ACTIVE", "APPROVE"].includes(status) ? "good"
-    : ["FAILED", "REJECT", "VALIDATION_FAILED", "INFERENCE_FAILED"].includes(status) ? "bad"
-      : ["RUNNING", "VALIDATING", "QUEUED", "MANUAL_REVIEW", "DIAGNOSTIC_ONLY"].includes(status) ? "attention"
+  const key = status.toUpperCase()
+  const tone = ["READY", "COMPLETED", "ACTIVE", "APPROVE", "PASSED", "CURRENT", "CAPTURED"].includes(key) ? "good"
+    : ["FAILED", "REJECT", "VALIDATION_FAILED", "INFERENCE_FAILED", "ESTABLISHED_EXPOSURE", "DECLINED"].includes(key) ? "bad"
+      : ["RUNNING", "VALIDATING", "QUEUED", "MANUAL_REVIEW", "DIAGNOSTIC_ONLY", "ANOMALY", "REFUNDED", "UNRESOLVED_RISK"].includes(key) ? "attention"
         : "neutral"
   return <span className={cn("status-badge", `status-${tone}`)}><i aria-hidden="true" />{labelOf(status)}</span>
 }

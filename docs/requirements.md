@@ -100,6 +100,14 @@ Out of scope: real payment processing, bank transfers, settlement scheduling, st
 
 Additional acceptance: remove input files after a successful synthetic import, then train/score/export from PostgreSQL. A second batch must learn from eligible prior verified dispositions; pending/override-only records cannot enter training. Exact duplicate imports do not duplicate source rows. Conflicting imports roll back. Previous runs and all overrides remain intact. No file content in DB or logs. Model effectiveness must be measured, not promised. Use PostgreSQL locally and Neon hosted.
 
+## Phase 13 risk operations verification
+
+| Requirements | Implementation | Evidence |
+| --- | --- | --- |
+| FR-13, FR-14, FR-17 | Completed-run selector, backend-filtered payout queue, decision totals, and recorded historical trends | [Overview](../frontend/src/pages/dashboard-page.tsx), [queue](../frontend/src/pages/payout-queue-page.tsx), [component tests](../frontend/tests/risk-operations.test.tsx). Unknown daily coverage is shown separately from known non-settlement zeroes. |
+| FR-12, FR-18, FR-30 | Published transaction evidence, team and profession baselines, fraud paths, and Isolation Forest validation and fallback | [Investigation](../frontend/src/pages/payout-detail-page.tsx), [fraud insights](../frontend/src/pages/fraud-page.tsx), [model insights](../frontend/src/pages/models-page.tsx). Results are loaded from authenticated persisted APIs. |
+| FR-15, FR-16, FR-19, FR-21, FR-31, FR-32 | Versioned overrides with confirmation, conflict refresh, scoped audit history, and full-run CSV download | [Override form](../frontend/src/features/risk/override-dialog.tsx), [risk API contracts](../frontend/src/services/risk.ts), [component tests](../frontend/tests/risk-operations.test.tsx). The original decision and published findings are retained. |
+
 ## Phase 12 frontend verification
 
 | Requirements | Implementation | Verification |

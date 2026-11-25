@@ -7,7 +7,11 @@ import { EvaluationsPage } from "@/pages/evaluations-page"
 import { HealthPage } from "@/pages/health-page"
 import { LoginPage } from "@/pages/login-page"
 import { NotFoundPage } from "@/pages/not-found-page"
-import { RunWorkspacePage } from "@/pages/run-workspace-page"
+import { DashboardPage } from "@/pages/dashboard-page"
+import { FraudPage } from "@/pages/fraud-page"
+import { ModelsPage } from "@/pages/models-page"
+import { PayoutDetailPage } from "@/pages/payout-detail-page"
+import { PayoutQueuePage } from "@/pages/payout-queue-page"
 import { errorMessage } from "@/services/api"
 
 function SessionGate({ requireUser = false }: { requireUser?: boolean }) {
@@ -37,10 +41,11 @@ export function App() {
             <Route index element={<Navigate to="/datasets" replace />} />
             <Route path="/datasets" element={<DatasetsPage />} />
             <Route path="/evaluations" element={<EvaluationsPage />} />
-            <Route path="/dashboard" element={<RunWorkspacePage title="Overview" />} />
-            <Route path="/payouts" element={<RunWorkspacePage title="Payout queue" />} />
-            <Route path="/fraud" element={<RunWorkspacePage title="Fraud insights" />} />
-            <Route path="/models" element={<RunWorkspacePage title="Model insights" />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/payouts" element={<PayoutQueuePage />} />
+            <Route path="/payouts/:payoutId" element={<PayoutDetailPage />} />
+            <Route path="/fraud" element={<FraudPage />} />
+            <Route path="/models" element={<ModelsPage />} />
           </Route>
         </Route>
       </Route>
