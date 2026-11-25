@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { App } from "@/App"
 
-function renderApp(path = "/") {
+function renderApp(path = "/status") {
   const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0 } } })
   return render(
     <QueryClientProvider client={client}>
@@ -60,6 +60,6 @@ describe("application health", () => {
 
     expect(screen.getByRole("heading", { name: "Page not found" })).toBeTruthy()
     expect(screen.getByRole("link", { name: "Go to application status" }).getAttribute("href"))
-      .toBe("/")
+      .toBe("/status")
   })
 })
