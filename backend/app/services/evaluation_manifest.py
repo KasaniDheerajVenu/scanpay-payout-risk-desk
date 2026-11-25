@@ -58,7 +58,7 @@ def fingerprint(inputs: EvaluationInputs) -> str:
 
     payload = {
         "batch": {**asdict(inputs.batch), "pending_ids": sorted(inputs.batch.pending_ids)},
-        "config": inputs.config.model_dump(),
+        "config": inputs.config.version_metadata(),
         "teams": [asdict(row) for row in sorted(inputs.teams, key=lambda row: row.team_id)],
         "pending": [
             observation(row) for row in sorted(inputs.pending, key=lambda row: row.payout.payout_id)
@@ -72,6 +72,14 @@ def fingerprint(inputs: EvaluationInputs) -> str:
         "fraud_candidates": sorted(row.payout.payout_id for row in inputs.fraud_candidates),
         "monitoring": monitoring_metadata(inputs.monitoring),
     }
+    if inputs.config.statistics_digest is not None:
+        payload["historical_collection_days"] = [
+            asdict(row)
+            for row in sorted(
+                inputs.historical_collection_days,
+                key=lambda row: (row.team_id, row.collection_date, row.first_available_at),
+            )
+        ]
     return sha256(canonical_json(payload).encode("utf-8")).hexdigest()
 
 
@@ -100,10 +108,7 @@ def history_manifest(inputs: EvaluationInputs) -> EvaluationManifest:
         "snapshot_at": utc_iso(inputs.snapshot_at),
         "pending_imported_at": utc_iso(inputs.batch.imported_at),
         "source_input_digest": inputs.batch.input_digest,
-        "configuration": {
-            "rule_version": inputs.config.rule_version,
-            "feature_version": inputs.config.feature_version,
-        },
+        "configuration": inputs.config.version_metadata(),
         "pending_membership_ids": sorted(inputs.batch.pending_ids),
         "selected_pending": [
             record(row) for row in sorted(inputs.pending, key=lambda item: item.payout.payout_id)

@@ -10,6 +10,7 @@ from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
 from app.core.logging import logger
+from app.schemas.evaluation import EvaluationError
 from app.schemas.ingestion import ImportFailure
 
 
@@ -37,6 +38,10 @@ async def http_error(_request: Request, exc: HTTPException) -> JSONResponse:
 
 async def validation_error(_request: Request, _exc: RequestValidationError) -> JSONResponse:
     return error_response(422, "validation_error", "Invalid request")
+
+
+async def evaluation_error(_request: Request, exc: EvaluationError) -> JSONResponse:
+    return error_response(exc.status, exc.code, HTTPStatus(exc.status).phrase)
 
 
 async def import_error(_request: Request, exc: ImportFailure) -> JSONResponse:

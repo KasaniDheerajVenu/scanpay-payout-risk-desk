@@ -27,6 +27,7 @@ def reusable_run(session: Session, scope: str, batch_id: UUID, digest: str) -> E
         )
         .order_by(EvaluationRun.created_at, EvaluationRun.run_id)
         .limit(1)
+        .with_for_update()
     )
 
 

@@ -107,16 +107,15 @@ def read_attempts(
         yield from session.execute(statement).tuples()
 
 
-def historical_collection_bounds(
+def historical_collection_days(
     session: Session, scope: str, ids: set[str], before: date, cutoff: datetime
-) -> dict[str, tuple[date, date]]:
-    bounds = {}
+) -> Iterator[tuple[str, date, datetime]]:
     for page in batched(sorted(ids), 1000):
         statement = (
             select(
                 Transaction.team_id,
-                func.min(Transaction.collection_date_ist),
-                func.max(Transaction.collection_date_ist),
+                Transaction.collection_date_ist,
+                func.min(DatasetBatch.imported_at),
             )
             .join(DatasetBatch, Transaction.first_import_batch_id == DatasetBatch.batch_id)
             .where(
@@ -126,8 +125,6 @@ def historical_collection_bounds(
                 Transaction.collection_date_ist < before,
                 Transaction.created_at <= cutoff,
             )
-            .group_by(Transaction.team_id)
+            .group_by(Transaction.team_id, Transaction.collection_date_ist)
         )
-        for team_id, first_day, last_day in session.execute(statement):
-            bounds[team_id] = (first_day, last_day)
-    return bounds
+        yield from session.execute(statement).tuples()

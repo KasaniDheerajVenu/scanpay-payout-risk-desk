@@ -126,3 +126,52 @@ Phase 5 additionally revalidates pending payouts against the committed import bo
 | FR-02, FR-28, FR-29 | Scoped READY batch selection, exact pending membership, committed import boundary, payout revalidation, and database-only read-only REPEATABLE READ materialization | [Evaluation inputs](../backend/app/services/evaluation_input_service.py), [snapshot queries](../backend/app/repositories/evaluation_inputs.py), [PostgreSQL evaluation tests](../backend/tests/integration/test_evaluation.py) | Verified with synthetic backfills, unchanged membership, and source files deleted. Feature extraction and ML are pending. |
 | FR-05, FR-06, FR-07, FR-17 | Typed normal-history and fraud candidates, separate cutoff and availability clocks, historical completeness checks, and frozen 20-day monitoring inputs | [Eligibility and monitoring](../backend/app/risk_engine/eligibility.py), [policy tests](../backend/tests/unit/test_evaluation_policy.py), [PostgreSQL evaluation tests](../backend/tests/integration/test_evaluation.py) | Input preparation verified. Baselines, graph analysis, and dashboard remain pending. |
 | FR-21, FR-24, FR-30, NFR-02, NFR-06 | Server-side actor and scope, stable input fingerprint, sanitized manifest, advisory-lock run creation, and atomic claim/failure transitions | [Run service](../backend/app/services/evaluation_service.py), [manifest](../backend/app/services/evaluation_manifest.py), [PostgreSQL evaluation tests](../backend/tests/integration/test_evaluation.py) | Verified for Phase 5. Model metadata, publication and completion are later phases. |
+
+## Phase 6 traceability
+
+| ID | Implemented functionality | Implementation and tests | Status |
+| --- | --- | --- | --- |
+| FR-02, FR-03, FR-04, NFR-01 | Versioned, ordered features over the accepted PostgreSQL payout window, exact payable cents, and distinct missing-value states | [Feature definitions](../backend/app/risk_engine/feature_schema.py), [feature extraction](../backend/app/risk_engine/features.py), [unit tests](../backend/tests/unit/test_statistics.py), [PostgreSQL pipeline tests](../backend/tests/integration/test_statistical_pipeline.py) | Verified on fabricated records, including deleted inputs and a late capture. |
+| FR-05, FR-06, FR-09 | Time-qualified historical cohorts, comparable coverage, balanced leave-one-team-out peer baselines, Median/IQR, materiality, and sparse fallback | [Baselines](../backend/app/risk_engine/baselines.py), [comparisons](../backend/app/risk_engine/statistical_anomalies.py), [chronological analysis](../backend/app/services/statistical_analysis_service.py), [unit tests](../backend/tests/unit/test_statistics.py) | Verified. Thresholds are engineering assumptions. |
+| FR-12, FR-18, NFR-03, NFR-06 | Typed statistical findings with computable explanations, source IDs, sample counts, and safe persistence shape | [Findings](../backend/app/schemas/risk_findings.py), [PostgreSQL pipeline tests](../backend/tests/integration/test_statistical_pipeline.py) | Statistical evidence verified. Final reasons and user-facing investigation remain scheduled. |
+| FR-10, FR-29, NFR-02 | Ordered numeric model contract, separate metadata and availability, policy fingerprinting, and historical features with separate event and import cutoffs | [Analysis service](../backend/app/services/statistical_analysis_service.py), [manifest](../backend/app/services/evaluation_manifest.py), [unit tests](../backend/tests/unit/test_statistics.py) | Feature contract verified. Isolation Forest and training-only preprocessing are scheduled for Phase 8. |
+| FR-07, FR-08, FR-11, FR-30 | Fraud graph analysis, final decisions, and publication | Phase 7 fraud analysis, Phase 8 ML, and Phase 9 publication | Scheduled for subsequent phases. |
+
+## Phase 7 traceability
+
+| ID | Implemented functionality | Implementation and tests | Status |
+| --- | --- | --- | --- |
+| FR-07, NFR-02 | Cutoff-known seeds, validated note references and local mappings, typed graph, strong projection and deterministic key | [Evidence](../backend/app/risk_engine/fraud_evidence.py), [graph](../backend/app/risk_engine/fraud_graph.py), [clusters](../backend/app/risk_engine/fraud_clusters.py), [unit tests](../backend/tests/unit/test_fraud.py) | Verified against fabricated cases. |
+| FR-08, FR-12, NFR-03, NFR-06 | Direct and corroborated exposure, non-payable and incidental leads, safe typed paths, deterministic primary and alternatives | [Rules](../backend/app/risk_engine/fraud_rules.py), [findings](../backend/app/schemas/fraud_findings.py), [tests](../backend/tests/unit/test_fraud.py) | Evidence and findings verified. Final reasons and decisions remain scheduled. |
+| FR-02, FR-06, FR-28, FR-29 | Shared PostgreSQL snapshot, retained pending boundary, time-qualified contamination, and recomputed statistical cohorts | [Analysis](../backend/app/services/fraud_analysis_service.py), [unit tests](../backend/tests/unit/test_fraud.py), [PostgreSQL tests](../backend/tests/integration/test_fraud_pipeline.py) | Verified. Isolation Forest remains scheduled for Phase 8. |
+| FR-11, FR-30, FR-31 | Final cluster, model, and decision publication | Later evaluation phases | Scheduled. Phase 7 supplies typed drafts. |
+
+### Phase 8 verification
+
+| Requirements | Implementation | Evidence | Status |
+| --- | --- | --- | --- |
+| FR-10, FR-29, NFR-02 | PostgreSQL-snapshot inputs with Phase 7 contamination filtering, chronological training/calibration/holdout, training-only preprocessing and deterministic refitting | [Training](../backend/app/ml/training.py), [preprocessing](../backend/app/ml/preprocessing.py), [unit tests](../backend/tests/unit/test_ml.py), [PostgreSQL test](../backend/tests/integration/test_ml_pipeline.py) | Verified with synthetic inputs. Removing the input CSVs does not affect evaluation. |
+| FR-10, FR-29 | Fixed calibration, holdout workload gates, explicit fallback and evidence-backed inference | [Validation](../backend/app/ml/validation.py), [inference](../backend/app/ml/inference.py), [unit tests](../backend/tests/unit/test_ml.py) | Active and fallback paths verified. The bundled synthetic scenario was diagnostic-only because none of its four holdout flags met the actionability gate. |
+| FR-30, FR-31 | Persistence-compatible model metadata and findings with review eligibility | [Typed contracts](../backend/app/schemas/ml_findings.py), [analysis service](../backend/app/services/ml_analysis_service.py), [PostgreSQL test](../backend/tests/integration/test_ml_pipeline.py) | Drafts and preservation of prior decisions verified. Atomic publication is scheduled for Phase 9. |
+
+### Phase 9 verification
+
+| Requirements | Implementation | Evidence | Status |
+| --- | --- | --- | --- |
+| FR-07, FR-08, FR-09, FR-10, FR-11 | Hybrid precedence, safety fallback, typed evidence and actionable explanations | [Policy](../backend/app/risk_engine/hybrid_decisions.py), [evidence validation](../backend/app/risk_engine/decision_evidence.py), [unit tests](../backend/tests/unit/test_hybrid_decisions.py) | Verified on synthetic inputs. |
+| FR-29, FR-30, FR-31 | Single-snapshot execution, compatible model reuse, frozen monitoring, atomic publication, and stale-attempt recovery | [Execution](../backend/app/services/evaluate_batch.py), [publication](../backend/app/services/evaluation_publication.py), [PostgreSQL tests](../backend/tests/integration/test_hybrid_evaluation.py) | Verified against PostgreSQL with 20-payout and general batches, rollback, concurrent requests, retries and prior override preservation. |
+| FR-30 | Explicit local batch selection and authenticated CLI | [CLI](../backend/scripts/evaluate_batch.py), [PostgreSQL tests](../backend/tests/integration/test_hybrid_evaluation.py) | Verified with synthetic admin credentials. Public evaluation and result APIs are assigned to later phases. |
+
+### Phase 10 verification
+
+| Requirements | Implementation | Evidence | Status |
+| --- | --- | --- | --- |
+| FR-12, FR-15, FR-16, FR-21 | Authenticated override, scoped audit timeline, published-snapshot evidence validation and stale-version conflict | [API](../backend/app/api/payout_decisions.py), [service](../backend/app/services/decision_overrides.py), [PostgreSQL tests](../backend/tests/integration/test_decision_overrides.py) | Verified with synthetic users and PostgreSQL, including concurrent writes and rollback. |
+| FR-20, FR-24, FR-31, FR-32 | Original automated result and previous events retained, shared scoped effective decision projection, and no override propagation or training-label conversion | [Projection query](../backend/app/repositories/payout_decisions.py), [projection tests](../backend/tests/unit/test_override_projection.py), [PostgreSQL tests](../backend/tests/integration/test_decision_overrides.py) | Verified across run re-evaluation, application restart and independent hosted reviewer scopes. Phase 11 consumers remain scheduled. |
+
+### Phase 11 verification
+
+| Requirements | Implementation | Evidence | Status |
+| --- | --- | --- | --- |
+| FR-13, FR-14, FR-17, FR-18, FR-30, FR-31 | Evaluation and model results, scoped queue and investigation, frozen monitoring, and run-specific fraud context | [Routes](../backend/app/api/risk_results.py), [contracts](../backend/app/schemas/risk_results.py), [result service](../backend/app/services/risk_results.py), [PostgreSQL HTTP tests](../backend/tests/integration/test_risk_operations.py) | Synthetic verification covers the authenticated upload, evaluate, investigate, override and history workflow. |
+| FR-19, FR-21, FR-32 | Authorized full-run export using the shared effective decision projection and one read-only snapshot | [CSV renderer](../backend/app/services/decision_export.py), [unit tests](../backend/tests/unit/test_risk_read_contracts.py), [PostgreSQL HTTP tests](../backend/tests/integration/test_risk_operations.py) | Synthetic verification covers 20 and two-payout exports, concurrent overrides, formula protection and reviewer isolation. |
