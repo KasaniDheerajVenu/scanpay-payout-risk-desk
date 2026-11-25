@@ -87,6 +87,7 @@ def decision_drafts(
         evidence.check_findings(row, observation, fraud_finding, ml_finding)
         draft = decide(observation, fraud_finding, ml_finding)
         fraud_refs = {ref for lead in fraud_finding.leads for ref in lead.historical_evidence}
+        fraud_refs.update(fraud_finding.coordinated_review_evidence)
         if fraud_finding.primary is not None:
             fraud_refs.update(fraud_finding.primary.historical_evidence)
         evidence.check(

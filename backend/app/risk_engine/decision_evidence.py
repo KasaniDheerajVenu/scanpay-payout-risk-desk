@@ -1,8 +1,9 @@
 from collections import defaultdict
 from collections.abc import Iterable
 
-from app.models.values import TransactionStatus
+from app.models.values import ReasonCode, TransactionStatus
 from app.risk_engine.fraud_evidence import card_key, case_refs, resolve_seeds
+from app.risk_engine.fraud_rules import coordinated_payment_evidence
 from app.risk_engine.hybrid_decisions import statistical_evidence
 from app.risk_engine.inputs import EvaluationInputs, HistoricalObservation, PendingObservation
 from app.schemas.evaluation import EvaluationError
@@ -61,6 +62,7 @@ def source_refs(row: HistoricalObservation | PendingObservation) -> set[Evidence
 class DecisionEvidence:
     def __init__(self, inputs: EvaluationInputs, clusters: tuple[ClusterSnapshot, ...]) -> None:
         self.inputs = inputs
+        self.coordinated = coordinated_payment_evidence(inputs)
         self.history = {row.payout.payout_id: row for row in inputs.history}
         self.seeds = {row.payout.payout_id: row for row in inputs.fraud_candidates}
         self.reconstructed_refs = {
@@ -151,6 +153,7 @@ class DecisionEvidence:
                 in match.historical_evidence
             )
             if relationships == DIRECT_PATH:
+                require(seed.disposition.reason_code != ReasonCode.FRAUD_ACCOUNT_TAKEOVER)
                 require(steps[2].supports_exposure and steps[2].start.kind == NodeKind.CARD)
                 key = card_key(captures[current_id])
                 require(key is not None and key == card_key(historical_attempt))
@@ -191,6 +194,7 @@ class DecisionEvidence:
         for item in ml.unusual_features:
             self.check(item.evidence, allowed)
         self.check(fraud.current_evidence, current)
+        require(fraud.coordinated_review_evidence == self.coordinated.get(row.payout.payout_id, ()))
         require(
             (fraud.status == Exposure.ESTABLISHED)
             == fraud.established_exposure

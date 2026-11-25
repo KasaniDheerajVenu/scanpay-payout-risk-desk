@@ -3,6 +3,7 @@ from contextlib import ExitStack
 from datetime import date, timedelta
 from io import StringIO
 
+import pytest
 from test_auth import csrf_headers
 from test_decision_overrides import signed_in
 from test_evaluation import FIXTURES, INITIAL_CUTOFF
@@ -20,7 +21,7 @@ SCENARIOS = (
 )
 
 
-def csv_upload():
+def csv_upload(probe_count=0):
     rows = {kind: [] for kind in FileType}
     action = date(2025, 2, 17)
     for team, profession, current, method, _, _ in SCENARIOS:
@@ -110,6 +111,22 @@ def csv_upload():
             else:
                 rows[FileType.PENDING_PAYOUTS].append([*payout, "PENDING_DECISION"])
 
+    for index in range(probe_count):
+        rows[FileType.LATEST_TRANSACTIONS].append(
+            [
+                f"probe-{index}",
+                "job",
+                f"{action} 10:55",
+                2,
+                0,
+                "card",
+                f"card-routine-0-{index}",
+                "US",
+                "declined",
+                "Synthetic",
+                "00420",
+            ]
+        )
     upload = {}
     for kind, records in rows.items():
         header = (FIXTURES / "initial" / f"{kind}.csv").read_text().splitlines()[0]
@@ -153,3 +170,44 @@ def test_verified_exceptions_keep_independent_routine_baselines_and_published_de
         dashboard = read(client, "/api/dashboard", run_id).json()
         assert dashboard["total"] == {"count": 4, "cents": 120_000}
         assert dashboard["categories"]["open_manual_review"] == {"count": 3, "cents": 100_000}
+
+
+@pytest.mark.parametrize(("probe_count", "expected"), [(1, "Approve"), (2, "Manual review")])
+def test_cross_team_sequence_without_known_cards(evaluation_db, probe_count, expected):
+    _, settings, admin, _ = evaluation_db
+    with ExitStack() as stack:
+        client = signed_in(stack, settings, admin.username)
+        upload = client.post(
+            "/api/datasets/upload",
+            headers=csrf_headers(client),
+            data={"mode": "INITIAL", "cutoff": INITIAL_CUTOFF},
+            files=csv_upload(probe_count),
+        )
+        assert upload.status_code == 201, upload.text
+        batch = upload.json()["batch_id"]
+        completed = start(client, batch)
+        assert completed.status_code == 201, completed.text
+        assert completed.json()["rule_version"] == "hybrid-v3"
+        run_id = completed.json()["run_id"]
+        assert start(client, batch).json()["run_id"] == run_id
+        detail = read(client, "/api/payouts/routine-0", run_id).json()
+        rows = {row["payout_id"]: row for row in exported(client, run_id)}
+        assert rows["routine-0"]["decision"] == expected
+        assert rows["routine-0"]["fraud_cluster"] == ""
+        assert detail["payout"]["captured_count"] == 2
+        assert not detail["fraud"]["established_exposure"]
+        assert all(
+            pair[scope]["status"] != "anomaly"
+            for pair in detail["statistics"]
+            for scope in ("team", "profession")
+        )
+        assert not detail["ml"]["qualifies_for_review"]
+        if probe_count == 2:
+            assert set(rows["routine-0"]["evidence"].split(";")) >= {
+                "job",
+                "probe-0",
+                "probe-1",
+                "routine-0-0",
+                "routine-0-1",
+            }
+            assert "Verify the cited sequence" in rows["routine-0"]["reasons"]

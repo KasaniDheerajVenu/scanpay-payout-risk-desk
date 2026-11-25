@@ -19,7 +19,7 @@ from app.risk_engine.fraud_evidence import (
     visible_attempts,
 )
 from app.risk_engine.fraud_graph import build_graph
-from app.risk_engine.fraud_rules import assess_pending
+from app.risk_engine.fraud_rules import assess_pending, coordinated_payment_evidence
 from app.risk_engine.inputs import Attempt, Eligibility, EvaluationConfig, EvaluationInputs
 from app.schemas.fraud_findings import ClusterSnapshot, FraudFinding, UnresolvedSeed
 from app.services.evaluation_input_service import capture_inputs
@@ -91,6 +91,8 @@ def contamination_for_history(
 ) -> tuple[Contamination, ...]:
     by_card: dict[str, list[tuple[Seed, Attempt]]] = defaultdict(list)
     for seed in seeds:
+        if not seed.implicates_payer_cards:
+            continue
         for source in seed.attempts:
             if (card := card_key(source)) is not None:
                 by_card[card].append((seed, source))
@@ -138,8 +140,13 @@ def analyze_fraud(inputs: EvaluationInputs, mapping: CaseMapping | None = None) 
     graph = build_graph(inputs, seeds)
     clusters = build_clusters(graph, seeds)
     by_seed = {seed: cluster for cluster in clusters for seed in cluster.case_payout_ids}
+    coordinated = coordinated_payment_evidence(inputs)
     pending = tuple(
-        assess_pending(inputs, graph, row, seeds, by_seed, unresolved, config.fraud_mapping_version)
+        assess_pending(
+            inputs, graph, row, seeds, by_seed, unresolved, config.fraud_mapping_version
+        ).model_copy(
+            update={"coordinated_review_evidence": coordinated.get(row.payout.payout_id, ())}
+        )
         for row in sorted(inputs.pending, key=lambda item: item.payout.payout_id)
     )
     return FraudAnalysis(

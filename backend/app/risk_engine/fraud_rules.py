@@ -1,5 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import timedelta
 
 import networkx as nx
 
@@ -156,6 +157,22 @@ def profile_links(
         (item for item in seed.attempts if item.status == TransactionStatus.CAPTURED), None
     )
     if (
+        seed.reason == ReasonCode.FRAUD_ACCOUNT_TAKEOVER
+        and current is not None
+        and NodeKind.BANK in certified
+        and CORROBORATION.intersection(certified)
+    ):
+        return [], [
+            InvestigativeLead(
+                relationship=Relationship.UNRESOLVED_DESTINATION,
+                strength=Strength.UNRESOLVED,
+                seed_payout_id=seed.payout_id,
+                identifier_categories=tuple(sorted(certified)),
+                current_evidence=pending_refs(row, current),
+                historical_evidence=case_refs(seed),
+            )
+        ]
+    if (
         current is not None
         and history is not None
         and not victim
@@ -282,6 +299,54 @@ def cluster_matches(
     )
 
 
+COORDINATION_WINDOW = timedelta(minutes=30)
+COORDINATION_AMOUNT_RATIO = 20
+COORDINATION_MIN_CARDS = 2
+
+
+def coordinated_payment_evidence(inputs: EvaluationInputs) -> dict[str, tuple[EvidenceRef, ...]]:
+    """Conservative review heuristic on the accepted attempts of the selected batch."""
+    observed = {
+        row.payout.payout_id: pending_attempts(inputs, row).values() for row in inputs.pending
+    }
+    probes: dict[str, list[Attempt]] = defaultdict(list)
+    for attempts in observed.values():
+        for attempt in attempts:
+            if (
+                attempt.status in {TransactionStatus.DECLINED, TransactionStatus.REFUNDED}
+                and attempt.amount_cents > 0
+                and (key := card_key(attempt)) is not None
+            ):
+                probes[key].append(attempt)
+
+    findings = {}
+    for payout_id, attempts in observed.items():
+        peer_cards: dict[str, dict[str, set[str]]] = defaultdict(dict)
+        for capture in attempts:
+            key = card_key(capture)
+            if capture.status != TransactionStatus.CAPTURED or key is None:
+                continue
+            for probe in probes.get(key, ()):
+                if (
+                    probe.team_id != capture.team_id
+                    and timedelta() < capture.created_at - probe.created_at <= COORDINATION_WINDOW
+                    and capture.amount_cents >= COORDINATION_AMOUNT_RATIO * probe.amount_cents
+                ):
+                    peer_cards[probe.team_id].setdefault(key, set()).update(
+                        (probe.txn_id, capture.txn_id)
+                    )
+        evidence: list[tuple[EvidenceType, str]] = []
+        for peer, cards in peer_cards.items():
+            if len(cards) >= COORDINATION_MIN_CARDS:
+                evidence.append((EvidenceType.TEAM, peer))
+                evidence.extend(
+                    (EvidenceType.TRANSACTION, txn) for ids in cards.values() for txn in ids
+                )
+        if evidence:
+            findings[payout_id] = refs(*evidence)
+    return findings
+
+
 def assess_pending(
     inputs: EvaluationInputs,
     graph: nx.MultiGraph,
@@ -343,7 +408,12 @@ def assess_pending(
     assessable_cards = (
         bool(captured_cards)
         and all(card_key(item) for item in captured_cards)
-        and any(card_key(attempt) for seed in seeds for attempt in seed.attempts)
+        and any(
+            card_key(attempt)
+            for seed in seeds
+            if seed.implicates_payer_cards
+            for attempt in seed.attempts
+        )
     )
     if matches:
         status = Exposure.ESTABLISHED

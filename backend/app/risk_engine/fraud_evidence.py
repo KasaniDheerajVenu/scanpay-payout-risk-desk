@@ -24,7 +24,7 @@ DIRECTIVES = {
     "signup device": NodeKind.DEVICE,
     "bank routing and last4": NodeKind.BANK,
 }
-POLICY_VERSION = "fraud-evidence-v2"
+POLICY_VERSION = "fraud-evidence-v3"
 TEST_SEQUENCE_WINDOW = timedelta(hours=2)
 CASE_CLOCK_TOLERANCE_MINUTES = 15
 CASE_TIME_ZONE = ZoneInfo("Asia/Kolkata")
@@ -65,6 +65,10 @@ class Seed:
         reason = self.history.disposition.reason_code
         assert reason is not None
         return reason
+
+    @property
+    def implicates_payer_cards(self) -> bool:
+        return self.reason in {ReasonCode.FRAUD_CARD_RING, ReasonCode.FRAUD_CARD_TESTING}
 
     @property
     def known_at(self) -> datetime:
