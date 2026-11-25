@@ -21,6 +21,28 @@ class EvaluationConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
     rule_version: str = Field(default="input-v1", pattern=r"^[a-zA-Z0-9_.-]{1,64}$")
     feature_version: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9_.-]{1,64}$")
+    statistics_digest: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    fraud_policy_version: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9_.-]{1,64}$")
+    fraud_mapping_version: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9_.-]{1,64}$")
+    fraud_mapping_digest: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    ml_policy_version: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9_.-]{1,64}$")
+    ml_policy_digest: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+
+    def version_metadata(self) -> dict[str, str | None]:
+        versions = {"rule_version": self.rule_version, "feature_version": self.feature_version}
+        if self.statistics_digest is not None:
+            versions["statistics_digest"] = self.statistics_digest
+        if self.fraud_policy_version is not None:
+            versions["fraud_policy_version"] = self.fraud_policy_version
+        if self.fraud_mapping_version is not None:
+            versions["fraud_mapping_version"] = self.fraud_mapping_version
+        if self.fraud_mapping_digest is not None:
+            versions["fraud_mapping_digest"] = self.fraud_mapping_digest
+        if self.ml_policy_version is not None:
+            versions["ml_policy_version"] = self.ml_policy_version
+        if self.ml_policy_digest is not None:
+            versions["ml_policy_digest"] = self.ml_policy_digest
+        return versions
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,6 +196,13 @@ class MonitoringInput:
     days: tuple[MonitoringDay, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class CollectionAvailability:
+    team_id: str
+    collection_date: date
+    first_available_at: datetime
+
+
 @dataclass(frozen=True, slots=True, repr=False)
 class EvaluationInputs:
     batch: SelectedBatch
@@ -185,6 +214,7 @@ class EvaluationInputs:
     history: tuple[HistoricalObservation, ...]
     fraud_candidates: tuple[HistoricalObservation, ...]
     monitoring: MonitoringInput
+    historical_collection_days: tuple[CollectionAvailability, ...] = ()
 
     @property
     def normal_candidates(self) -> tuple[HistoricalObservation, ...]:

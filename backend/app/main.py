@@ -9,10 +9,19 @@ from app.api.auth import router as auth_router
 from app.api.datasets import router as dataset_router
 from app.api.dependencies import enforce_api_security, private_api_response
 from app.api.health import router as health_router
+from app.api.payout_decisions import router as payout_decision_router
+from app.api.risk_results import router as risk_results_router
 from app.core.config import Settings
-from app.core.errors import http_error, import_error, unexpected_errors, validation_error
+from app.core.errors import (
+    evaluation_error,
+    http_error,
+    import_error,
+    unexpected_errors,
+    validation_error,
+)
 from app.core.logging import configure_logging, logger
 from app.database.session import Database
+from app.schemas.evaluation import EvaluationError
 from app.schemas.ingestion import ImportFailure
 from app.services.auth_service import AuthService
 
@@ -42,9 +51,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     application.include_router(health_router)
     application.include_router(auth_router)
     application.include_router(dataset_router)
+    application.include_router(payout_decision_router)
+    application.include_router(risk_results_router)
     application.add_exception_handler(HTTPException, http_error)
     application.add_exception_handler(RequestValidationError, validation_error)
     application.add_exception_handler(ImportFailure, import_error)
+    application.add_exception_handler(EvaluationError, evaluation_error)
     application.middleware("http")(unexpected_errors)
     application.middleware("http")(private_api_response)
     return application

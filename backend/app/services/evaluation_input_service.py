@@ -29,6 +29,7 @@ from app.repositories.sources import TeamDay
 from app.risk_engine.eligibility import historical_eligibility, is_fraud_seed, monitoring_input
 from app.risk_engine.inputs import (
     Attempt,
+    CollectionAvailability,
     Disposition,
     EvaluationConfig,
     EvaluationInputs,
@@ -315,9 +316,25 @@ def materialize(
     historical_attempts = read_covered_attempts(
         session, batch, [payout for payout, _ in past], pending=False
     )
-    bounds = repository.historical_collection_bounds(
-        session, scope, {payout.team_id for payout, _ in past}, action_start, batch.cutoff
+    collection_days = tuple(
+        sorted(
+            (
+                CollectionAvailability(team_id, day, available_at)
+                for team_id, day, available_at in repository.historical_collection_days(
+                    session,
+                    scope,
+                    {payout.team_id for payout, _ in past},
+                    action_start,
+                    batch.cutoff,
+                )
+            ),
+            key=lambda row: (row.team_id, row.collection_date),
+        )
     )
+    bounds: dict[str, tuple[date, date]] = {}
+    for row in collection_days:
+        first_day, _ = bounds.get(row.team_id, (row.collection_date, row.collection_date))
+        bounds[row.team_id] = (first_day, row.collection_date)
     history = []
     for payout, disposition in sorted(
         past, key=lambda item: (item[0].created_at, item[0].payout_id)
@@ -347,6 +364,7 @@ def materialize(
         tuple(history),
         tuple(row for row in history if is_fraud_seed(row.disposition)),
         monitoring_input(batch.payout_date, tuple(history)),
+        collection_days,
     )
 
 

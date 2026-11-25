@@ -1,6 +1,7 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import timedelta
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -17,6 +18,8 @@ from app.risk_engine.inputs import EvaluationConfig, EvaluationInputs
 from app.schemas.evaluation import EvaluationError, RunFailure, RunSummary
 from app.services.evaluation_input_service import capture_inputs, evaluation_scope
 from app.services.evaluation_manifest import fingerprint, history_manifest, monitoring_metadata
+
+RUN_ATTEMPT_TTL = timedelta(hours=1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +62,8 @@ def prepare_run(
     actor: ActorContext,
     batch_id: UUID,
     config: EvaluationConfig | None = None,
+    *,
+    recover_stale: bool = False,
 ) -> RunPreparation:
     inputs = capture_inputs(database, actor, batch_id, config)
     digest = fingerprint(inputs)
@@ -69,7 +74,15 @@ def prepare_run(
         lock_fingerprint(session, batch_id, digest)
         existing = reusable_run(session, scope, batch_id, digest)
         if existing is not None:
-            return RunPreparation(summary(existing), None)
+            if not recover_stale or existing.status == EvaluationStatus.COMPLETED:
+                return RunPreparation(summary(existing), None)
+            now = session.scalar(select(func.clock_timestamp()))
+            started = existing.started_at or existing.created_at
+            if now - started < RUN_ATTEMPT_TTL:
+                return RunPreparation(summary(existing), None)
+            existing.status = EvaluationStatus.FAILED
+            existing.completed_at = now
+            existing.error_summary = {"code": RunFailure.ATTEMPT_EXPIRED.value}
         row = EvaluationRun(
             batch_id=batch_id,
             scope_key=scope,

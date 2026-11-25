@@ -2,7 +2,7 @@
 
 A risk operations application for evaluating merchant payouts against historical behaviour and known fraud cases. The system is designed to support explainable decisions, analyst investigation, audited overrides and financial risk monitoring.
 
-> Project status: implementation in progress; this document specifies the intended design. The architecture, endpoints and detection methods described here are planned, not claims of implemented or validated functionality.
+> Project status: implementation in progress. The development section lists the workflows currently available.
 
 ## Project goals
 
@@ -50,7 +50,7 @@ The assessment datasets are processed locally and must not be committed, uploade
 
 ## Development and deployment
 
-The frontend and FastAPI scaffold provide a local status screen. PostgreSQL migrations, database health, authentication, and dataset import APIs are implemented. Evaluation and the responsive login and upload UI follow in later phases.
+The frontend provides a local status screen. The backend supports authenticated dataset import, evaluation through the API or private CLI, dashboard and investigation reads, analyst overrides and CSV export. The responsive workflow UI is planned for later phases.
 
 ### Verify the PostgreSQL schema locally
 
@@ -137,4 +137,11 @@ The hosted API accepts the bundled `synthetic-v1` preset. Package `sample_data/s
 
 ## Database-first workflow
 
-Initial and incremental CSV imports extract every source field into typed PostgreSQL columns; raw files are not stored. Import metadata tracks checksums and membership. Explicit evaluation runs query eligible database history and selected pending rows; train/validate/score Isolation Forest and combine it with statistics and known fraud. Persist immutable predictions and append authenticated analyst decision events. Select a completed run for monitoring and export. Local app supports actual uploads; hosted synthetic demo offers built-in presets only. The current implementation and test status must be verified locally; no claims of completed model training or deployment.
+After importing a local dataset, evaluate its explicit batch ID with the same database and local admin account used for import. The CLI prompts for the password and returns the run ID, status, and whether a new result was created.
+
+```powershell
+$env:PYTHONPATH = "backend"
+.\.venv\Scripts\python.exe -m scripts.evaluate_batch --username local-admin --batch-id YOUR_BATCH_UUID
+```
+
+Equivalent completed requests reuse the run. While an equivalent attempt is running, the command returns a conflict. A retry starts a fresh attempt after failure or after an unpublished attempt expires. See [evaluation lifecycle](docs/database-design.md#evaluation-input-boundary) for the retry policy.

@@ -461,7 +461,9 @@ def test_authenticated_actor_attribution_and_previous_decisions_unchanged(evalua
         )
         assert response.status_code == 200
         assert response.json() == {"requested_by": str(admin.user_id)}
-        assert "/api/evaluations" not in client.get("/openapi.json").json()["paths"]
+        queued = client.get("/api/evaluations", params={"batch_id": str(batch.batch_id)})
+        assert queued.status_code == 200
+        assert [(run["status"], run["summary"]) for run in queued.json()] == [("QUEUED", None)]
     with database.session() as session:
         now = datetime.now(UTC)
         prior = EvaluationRun(

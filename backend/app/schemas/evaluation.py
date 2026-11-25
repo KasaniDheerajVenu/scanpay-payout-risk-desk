@@ -19,6 +19,8 @@ class RunFailure(StrEnum):
     INPUT_INVALID = "input_invalid"
     INPUT_UNAVAILABLE = "input_unavailable"
     PROCESSING_FAILED = "processing_failed"
+    PUBLICATION_FAILED = "publication_failed"
+    ATTEMPT_EXPIRED = "attempt_expired"
 
 
 class DispositionTrace(TypedDict):
